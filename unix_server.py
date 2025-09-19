@@ -1,21 +1,36 @@
 import asyncio
 import os
 from typing import Optional
+
+from PyQt5.QtCore import QObject, pyqtSignal
+
 from global_def import *
 
 # ---------------- Unix Socket Server ----------------
-class UnixServer:
-    def __init__(self, path: str = UNIX_MSG_SERVER_URI, recv_callback=None):
+class UnixServer(QObject):
+    unix_data_received = pyqtSignal(str, int)
+    def __init__(self, path: str = UNIX_MSG_SERVER_URI):
+        super().__init__()
         self.path = path
         self._server: Optional[asyncio.base_events.Server] = None
         self._task: Optional[asyncio.Task] = None
-        self.recv_callback = recv_callback
+
 
 
     async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-        addr = writer.get_extra_info("peername")
-        # print(f"[UnixServer] + Connection {addr}")
-        log.debug("[UnixServer] + Connection %s", addr)
+        sock = writer.get_extra_info("socket")
+        peer_info = "unknown"
+        if sock:
+            try:
+                uid, gid = sock.getpeereid()
+                peer_info = f"uid={uid}, gid={gid}"
+            except AttributeError:
+                import struct, socket as s
+                creds = sock.getsockopt(s.SOL_SOCKET, s.SO_PEERCRED, struct.calcsize('3i'))
+                pid, uid, gid = struct.unpack('3i', creds)
+                peer_info = f"pid={pid}, uid={uid}, gid={gid}"
+
+        log.debug("[UnixServer] + Connection from %s", peer_info)
         try:
             while True:
                 data = await reader.read(1024)
@@ -24,11 +39,11 @@ class UnixServer:
                 msg = data.decode(errors="ignore")
                 # print(f"[UnixServer]   Received: {msg}")
                 log.debug("[UnixServer] + Received: %s", msg)
-                '''try signal/slot'''
-                if self.recv_callback is not None:
-                    self.recv_callback(msg)
+
+
                 writer.write(f"{msg} OK".encode())
                 await writer.drain()
+                self.unix_data_received.emit(msg, peer_info)
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -36,7 +51,7 @@ class UnixServer:
             log.debug(e)
         finally:
             # print(f"[UnixServer] - Close {addr}")
-            log.debug("[UnixServer] + Close: %s", addr)
+            log.debug("[UnixServer] + Close: %s", peer_info)
             writer.close()
             await writer.wait_closed()
 

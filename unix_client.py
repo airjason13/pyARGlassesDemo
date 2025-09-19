@@ -41,7 +41,6 @@ class UnixClient:
             await self.reconnect()
             return -1
 
-
         data = await self.reader.read(1024)
         log.debug(f"[UnixClient] Received: {data.decode()}")
 

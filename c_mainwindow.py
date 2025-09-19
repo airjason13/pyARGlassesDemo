@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QApplicat
 from PyQt5.QtCore import Qt, QTimer
 from unix_server import UnixServer
 from unix_client import UnixClient
-
+from cmd_parser import CmdParser
 from global_def import *
 
 class CMainWindow(QMainWindow):
@@ -14,42 +14,50 @@ class CMainWindow(QMainWindow):
         log.debug("MainWindow up!")
         self.async_loop = async_loop
         self.initUI()
-        self.unix_server = UnixServer(UNIX_DEMO_APP_SERVER_URI, self.unix_server_recv_cb)
-        self.msg_unix_client = UnixClient(path=UNIX_MSG_SERVER_URI)
+        self.unix_server = UnixServer(UNIX_DEMO_APP_SERVER_URI)
+        self.unix_server.unix_data_received.connect(self.unix_data_received_handler)
+        self.msg_app_unix_client = UnixClient(path=UNIX_MSG_SERVER_URI)
+        self.cmd_parser = CmdParser(self.msg_app_unix_client)
+        self.cmd_parser.unix_data_ready_to_send.connect(self.send_to_msg_server)
         QTimer.singleShot(0, lambda: asyncio.create_task(self.unix_server.start()))
-        QTimer.singleShot(0, lambda: asyncio.create_task(self.msg_unix_client.connect()))
+        QTimer.singleShot(0, lambda: asyncio.create_task(self.msg_app_unix_client.connect()))
 
         signal.signal(signal.SIGINT, self.stop_server)
 
         # === 測試用 新增：每 5 秒觸發一次 test_send_unix_msg ===
-        self.timer = QTimer(self)
-        self.timer.setInterval(5000)  # 5 秒
-        self.timer.timeout.connect(self._periodic_unix_msg)
-        self.timer.start()
+        # self.timer = QTimer(self)
+        # self.timer.setInterval(5000)  # 5 秒
+        # self.timer.timeout.connect(self._periodic_unix_msg)
+        # self.timer.start()
 
+    def send_to_msg_server(self, send_data:str):
+        log.debug("send_data:%s", send_data)
+        self._periodic_unix_msg(send_data)
 
     # def _periodic_unix_msg(self, data: bytes):
-    def _periodic_unix_msg(self):
+    def _periodic_unix_msg(self, data:str):
         """
         QTimer 觸發時呼叫，安排 coroutine 到 asyncio 事件迴圈
         """
         log.debug("")
         asyncio.run_coroutine_threadsafe(
-            self.test_send_unix_msg("Demo App Alive"),
+            self.test_send_unix_msg(data),
             self.async_loop
         )
 
-    async def test_send_unix_msg(self, unix_msg):
+    async def test_send_unix_msg(self, unix_msg:str):
         log.debug("test_unix_loop")
         if unix_msg is not None:
-            await self.msg_unix_client.send(unix_msg)
+            await self.msg_app_unix_client.send(unix_msg)
 
     # def init_msg_unix_client(self):
     #    self.msg_unix_client = UnixClient(path=UNIX_MSG_SERVER_URI)
 
-    def unix_server_recv_cb(self, msg):
+    def unix_data_received_handler(self, msg:str):
         log.debug("msg: %s", msg)
-        self.label.setText("這是 PyQt5 Demo 全螢幕無邊框主視窗" + "\n" + msg)
+        self.label.setText(msg)
+        self.cmd_parser.parse_cmds(msg)
+
 
     def initUI(self):
         # 設定視窗為全螢幕、無邊框、無標題列
