@@ -10,7 +10,7 @@ from c_mainwindow import CMainWindow
 from global_def import *
 
 async def main():
-    log.debug("GiS AR Glasses Demo")
+    log.debug(f"Welcome {Version}")
     app = QApplication(sys.argv)
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)

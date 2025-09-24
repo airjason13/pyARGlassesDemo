@@ -61,8 +61,8 @@ class CMainWindow(QMainWindow):
 
     def initUI(self):
         # 設定視窗為全螢幕、無邊框、無標題列
-        # self.setWindowFlags(Qt.FramelessWindowHint)
-        # self.showFullScreen()
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.showFullScreen()
 
         # 中央 Widget
         central_widget = QWidget()
