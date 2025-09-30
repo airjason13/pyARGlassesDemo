@@ -12,7 +12,7 @@ class CmdParser(QObject):
         super().__init__()
         self.msg_unix_client = msg_unix_client
 
-    def parse_cmds(self, data) -> str:
+    def parse_cmds(self, data):
         log.debug("data : %s", data)
 
         d = dict(item.split(':', 1) for item in data.split(';'))
@@ -24,25 +24,26 @@ class CmdParser(QObject):
             pass
         log.debug("%s", d)
         log.debug("d['cmd']: %s", d['cmd'])
-        resp = None
         try:
-            if 'get' in d['cmd']:
-                log.debug("i : %s, v: %s", 'cmd', d['cmd'])
-                resp = self.cmd_function_map[d['cmd']](self, d)
+            self.cmd_function_map[d['cmd']](self, d)
         except Exception as e:
             log.error(e)
-        return resp
+
 
     def demo_get_sw_version(self, data:dict):
-
         data['src'], data['dst'] = data['dst'], data['src']
         data['data'] = Version
         log.debug("data : %s", data)
         # Dict to Str
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
-        return reply
+
+
+    def demo_set_test(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        log.debug("data : %s", data)
 
     cmd_function_map = {
         DEMO_GET_SW_VERSION: demo_get_sw_version,
+        DEMO_SET_TEST: demo_set_test,
     }
