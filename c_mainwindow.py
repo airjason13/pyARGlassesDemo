@@ -1,19 +1,32 @@
 import asyncio
 import signal
 
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QApplication
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QApplication, QStackedLayout
 from PyQt5.QtCore import Qt, QTimer
 from unix_server import UnixServer
 from unix_client import UnixClient
 from cmd_parser import CmdParser
 from global_def import *
+from ui_pages.ui_media_page import MediaPage
+from ui_pages.ui_video_setting_page import VideoSettingPage
+
+Page_Select_Btn_Name_List = ["Media", "Video_Setting"]
+Page_List = [MediaPage, VideoSettingPage]
+
+Page_Map = dict(zip(Page_Select_Btn_Name_List, Page_List))
 
 class CMainWindow(QMainWindow):
     def __init__(self, async_loop):
         super().__init__()
         log.debug("MainWindow up!")
         self.async_loop = async_loop
-        self.initUI()
+        self.page_list = []
+        self.current_page_idx = 0
+        self.central_widget = None
+        self.layout = None
+        self.page_layout = None
+        # self.initUI()
+        self.init_ui()
         self.unix_server = UnixServer(UNIX_DEMO_APP_SERVER_URI)
         self.unix_server.unix_data_received.connect(self.unix_data_received_handler)
         self.msg_app_unix_client = UnixClient(path=UNIX_MSG_SERVER_URI)
@@ -24,6 +37,9 @@ class CMainWindow(QMainWindow):
 
         signal.signal(signal.SIGINT, self.stop_server)
 
+
+    def test_timer(self):
+        pass
         # === 測試用 新增：每 5 秒觸發一次 test_send_unix_msg ===
         # self.timer = QTimer(self)
         # self.timer.setInterval(5000)  # 5 秒
@@ -58,11 +74,34 @@ class CMainWindow(QMainWindow):
         self.label.setText(msg)
         self.cmd_parser.parse_cmds(msg)
 
+    def init_pages(self):
+        log.debug("init_pages")
 
+
+    def init_ui(self):
+        log.debug("init_ui")
+        self.central_widget = QWidget(self)
+        self.central_widget.setStyleSheet("background-color: black;")
+
+        self.setCentralWidget(self.central_widget)
+        self.page_layout = QStackedLayout()
+        for k, v in Page_Map.items():
+            page = v(self, self.central_widget)
+
+            self.page_list.append(page)
+
+            self.page_layout.addWidget(page)
+        self.central_widget.setLayout(self.page_layout)
+        self.page_layout.setCurrentIndex(0)
+
+
+        log.debug("self.page_layout.count() : %s", self.page_layout.count())
+
+    ''' old initUI '''
     def initUI(self):
         # 設定視窗為全螢幕、無邊框、無標題列
-        self.setWindowFlags(Qt.FramelessWindowHint)
-        self.showFullScreen()
+        # self.setWindowFlags(Qt.FramelessWindowHint)
+        # self.showFullScreen()
 
         # 中央 Widget
         central_widget = QWidget()
@@ -86,8 +125,18 @@ class CMainWindow(QMainWindow):
 
     def keyPressEvent(self, event):
         """按下 Esc 鍵退出程式"""
+        log.debug("keyPressEvent event.key : %s", event.key())
         if event.key() == Qt.Key_Escape:
             asyncio.create_task(self.shutdown_and_quit())
+        elif event.key() == Qt.Key_P:
+            log.debug("before, self.page_layout.currentIndex() : %d", self.page_layout.currentIndex())
+
+            if self.page_layout.currentIndex() == 1:
+                self.page_layout.setCurrentIndex(0)
+            else:
+                self.page_layout.setCurrentIndex(1)
+            # log.debug("self.current_page_idx : %d", self.current_page_idx)
+            log.debug("self.page_layout.currentIndex() : %d", self.page_layout.currentIndex())
 
 
     # ---- 關閉流程：非同步 ----
