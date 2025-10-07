@@ -3,6 +3,8 @@ import signal
 
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QApplication, QStackedLayout
 from PyQt5.QtCore import Qt, QTimer
+
+from ui_pages.ui_eng_test_page import EngPage
 from unix_server import UnixServer
 from unix_client import UnixClient
 from cmd_parser import CmdParser
@@ -10,12 +12,13 @@ from global_def import *
 from ui_pages.ui_media_page import MediaPage
 from ui_pages.ui_video_setting_page import VideoSettingPage
 
-Page_Select_Btn_Name_List = ["Media", "Video_Setting"]
-Page_List = [MediaPage, VideoSettingPage]
+Page_Select_Btn_Name_List = ["Media", "Video_Setting", "Eng"]
+Page_List = [MediaPage, VideoSettingPage, EngPage]
 
 Page_Map = dict(zip(Page_Select_Btn_Name_List, Page_List))
 
 class CMainWindow(QMainWindow):
+    TEST_FLAG = True # For Eng Page Show socket cmd
     def __init__(self, async_loop):
         super().__init__()
         log.debug("MainWindow up!")
@@ -71,7 +74,14 @@ class CMainWindow(QMainWindow):
 
     def unix_data_received_handler(self, msg:str):
         log.debug("msg: %s", msg)
-        self.label.setText(msg)
+        # print recv cmd on Eng page
+        if self.TEST_FLAG is True:
+            for i in range(len(self.page_list)):
+                if self.page_list[i].name == "Eng":
+                    self.page_list[i].set_recv_cmd(msg)
+                    self.page_layout.setCurrentIndex(i)
+                    log.debug("Jump to Eng Page")
+
         self.cmd_parser.parse_cmds(msg)
 
     def init_pages(self):
@@ -93,7 +103,8 @@ class CMainWindow(QMainWindow):
             self.page_layout.addWidget(page)
         self.central_widget.setLayout(self.page_layout)
         self.page_layout.setCurrentIndex(0)
-
+        # for p in self.page_list:
+        #     log.debug(p.name)
 
         log.debug("self.page_layout.count() : %s", self.page_layout.count())
 
