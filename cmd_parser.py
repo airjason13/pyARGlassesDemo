@@ -47,8 +47,8 @@ class CmdParser(QObject):
     def demo_get_mediafile_file_list(self, data:dict):
         self.get_file_list_handle(data, MEDIAFILE_URI_PATH)
 
-    def demo_get_snapshoots_file_list(self, data:dict):
-        self.get_file_list_handle(data, SNAPSHOOTS_URI_PATH)
+    def demo_get_snapshots_file_list(self, data:dict):
+        self.get_file_list_handle(data, SNAPSHOTS_URI_PATH)
 
     def demo_get_recordings_file_list(self, data:dict):
         self.get_file_list_handle(data, RECORDINGS_URI_PATH)
@@ -69,9 +69,9 @@ class CmdParser(QObject):
     cmd_function_map = {
         DEMO_GET_SW_VERSION: demo_get_sw_version,
         DEMO_GET_MEDIAFILE_FILE_LIST: demo_get_mediafile_file_list,
-        DEMO_GET_SNAPSHOOTS_FILE_LIST: demo_get_snapshoots_file_list,
+        DEMO_GET_SNAPSHOTS_FILE_LIST: demo_get_snapshots_file_list,
         DEMO_GET_RECORDINGS_FILE_LIST: demo_get_recordings_file_list,
-        DEMO_GET_MEDAI_FILE_LIST: demo_get_media_file_list,
+        DEMO_GET_MEDIA_FILE_LIST: demo_get_media_file_list,
         DEMO_GET_THUMBNAILS_FILE_LIST: demo_get_thumbnails_file_list,
         DEMO_GET_PLAYLISTS_FILE_LIST: demo_get_playlists_file_list,
         DEMO_SET_TEST: demo_set_test,
