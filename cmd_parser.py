@@ -61,9 +61,6 @@ class CmdParser(QObject):
     def demo_get_thumbnails_file_list(self, data:dict):
         self.get_file_list_handle(data, THUMBNAILS_URI_PATH)
 
-    def demo_get_playlists_file_list(self, data:dict):
-        self.get_file_list_handle(data, PLAYLISTS_URI_PATH)
-
     def demo_get_mediaengine_status(self, data:dict):
         data['src'], data['dst'] = data['dst'], data['src']
         data['data'] = self.media_engine.get_status_str()
@@ -94,10 +91,6 @@ class CmdParser(QObject):
         self.media_engine.set_current_file(data.get('data'))
         self.media_engine.single_play_from_cmd()
 
-    def demo_set_mediaengine_play_playlist(self, data:dict):
-        log.debug("data : %s", data.get('data'))
-        self.media_engine.set_current_playlist(data.get('data'))
-
     def demo_set_mediaengine_pause(self, data:dict):
         log.debug("data : %s", data.get('data'))
         if data.get('data') == 'True':
@@ -124,14 +117,12 @@ class CmdParser(QObject):
         DEMO_GET_RECORDINGS_FILE_LIST: demo_get_recordings_file_list,
         DEMO_GET_MEDIA_FILE_LIST: demo_get_media_file_list,
         DEMO_GET_THUMBNAILS_FILE_LIST: demo_get_thumbnails_file_list,
-        DEMO_GET_PLAYLISTS_FILE_LIST: demo_get_playlists_file_list,
         DEMO_GET_MEDIAENGINE_STATUS: demo_get_mediaengine_status,
         DEMO_GET_MEDIAENGINE_STILL_IMAGE_PERIOD: demo_get_mediaengine_still_image_period,
         DEMO_GET_MEDIAENGINE_FILE_URI: demo_get_mediaengine_file_uri,
 
         DEMO_SET_MEDIAENGINE_STILL_IMAGE_PERIOD: demo_set_mediaengine_still_image_period,
         DEMO_SET_MEDIAENGINE_PLAY_SINGLE_FILE: demo_set_mediaengine_play_single_file,
-        DEMO_SET_MEDIAENGINE_PLAY_PLAYLIST: demo_set_mediaengine_play_playlist,
         DEMO_SET_MEDIAENGINE_PAUSE: demo_set_mediaengine_pause,
         DEMO_SET_MEDIAENGINE_STOP: demo_set_mediaengine_stop,
         DEMO_SET_MEDIAENGINE_RESUME_PLAYING: demo_set_mediaengine_resume_playing,
