@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QStackedLayout, QPushButton, QGridLayout, QFileDialog, \
     QMessageBox
 
+from mediaengine.media_engine_def import PlayStatus
 from mediaengine.mediaengine import MediaEngine
 
 
@@ -19,6 +20,11 @@ class MediaPage(QWidget):
         self.central_widget = _central_qwidget
         self.label_title = None
         self.media_engine = MediaEngine()
+        self.media_engine.install_play_single_file_started(self.play_single_file_started)
+        self.media_engine.install_play_single_file_finished(self.play_single_file_finished)
+        self.media_engine.install_play_single_file_paused(self.play_single_file_paused)
+        self.media_engine.install_media_play_status_changed(self.play_single_file_status_changed)
+
 
         if ENG_UI is True:
             self.init_eng_ui()
@@ -52,7 +58,7 @@ class MediaPage(QWidget):
         self.btn_play = QPushButton(self)
         self.btn_play.setText("Play")
         self.btn_play.setStyleSheet("color: green;")
-        self.btn_play.clicked.connect(self.play_file)
+        self.btn_play.clicked.connect(self.btn_play_clicked)
 
         # Stop Btn
         self.btn_stop = QPushButton(self)
@@ -62,7 +68,7 @@ class MediaPage(QWidget):
 
         # Status Label
         self.label_status = QLabel(self)
-        self.label_status.setText("Play Status")
+        self.label_status.setText(f"Play Status: {self.media_engine.get_status_str()}")
         self.label_status.setStyleSheet("color: green;")
 
         self.media_control_layout = QGridLayout()
@@ -84,6 +90,9 @@ class MediaPage(QWidget):
         self.layout.addWidget(self.label_title)
         self.setLayout(self.layout)
 
+    def get_media_engine(self):
+        return self.media_engine
+
     def browse_file(self):
         # Add playlist later???
         path, _ = QFileDialog.getOpenFileName(self, "選擇檔案", os.getcwd(),
@@ -93,8 +102,25 @@ class MediaPage(QWidget):
             if ENG_UI is True:
                 self.label_file_uri.setText(os.path.basename(path))
 
+    def btn_play_clicked(self):
+        if (self.media_engine.get_status_int() == PlayStatus.IDLE
+                or self.media_engine.get_status_int() == PlayStatus.FINISHED):
+            self.play_single_file()
+        elif self.media_engine.get_status_int() == PlayStatus.PLAYING:
+            self.pause_play_single_file()
+        elif self.media_engine.get_status_int() == PlayStatus.PAUSED:
+            self.resume_play_single_file()
 
-    def play_file(self):
+    def pause_play_single_file(self):
+        log.debug(f"pause file: {self._current_file}")
+        self.media_engine.pause_single_file_play()
+
+    def resume_play_single_file(self):
+        log.debug(f"resume file: {self._current_file}")
+        self.media_engine.resume_single_file_play()
+
+
+    def play_single_file(self):
         log.debug("play_file")
         # add check file ext
         if self._current_file is not None:
@@ -113,5 +139,24 @@ class MediaPage(QWidget):
 
     def stop_play(self):
         log.debug("stop_file")
-        self.media_engine.stop_play()
+        self.media_engine.stop_single_file_play()
 
+    def play_single_file_started(self):
+        log.debug("play_single_file_started")
+        if ENG_UI:
+            self.btn_play.setText("Pause")
+
+    def play_single_file_finished(self, result):
+        log.debug(f"play_single_file_finished{result}")
+        if ENG_UI:
+            self.btn_play.setText("Play")
+
+    def play_single_file_paused(self):
+        log.debug("play_single_file_paused")
+        if ENG_UI:
+            self.btn_play.setText("Play")
+
+    def play_single_file_status_changed(self, status):
+        log.debug(f"play_single_file_status_changed:{status}")
+        if ENG_UI:
+            self.label_status.setText(f"Play Status: {self.media_engine.get_status_str()}")

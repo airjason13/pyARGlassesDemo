@@ -1,4 +1,5 @@
 import asyncio
+import enum
 import signal
 
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QApplication, QStackedLayout
@@ -12,13 +13,18 @@ from global_def import *
 from ui_pages.ui_media_page import MediaPage
 from ui_pages.ui_video_setting_page import VideoSettingPage
 
+class PageListEnum(enum.IntEnum):
+    Media = 0
+    Video_Setting = 1
+    Eng = 2
+
 Page_Select_Btn_Name_List = ["Media", "Video_Setting", "Eng"]
 Page_List = [MediaPage, VideoSettingPage, EngPage]
 
 Page_Map = dict(zip(Page_Select_Btn_Name_List, Page_List))
 
 class CMainWindow(QMainWindow):
-    TEST_FLAG = True # For Eng Page Show socket cmd
+    TEST_FLAG = False # For Eng Page Show socket cmd
     def __init__(self, async_loop):
         super().__init__()
         log.debug("MainWindow up!")
@@ -33,7 +39,7 @@ class CMainWindow(QMainWindow):
         self.unix_server = UnixServer(UNIX_DEMO_APP_SERVER_URI)
         self.unix_server.unix_data_received.connect(self.unix_data_received_handler)
         self.msg_app_unix_client = UnixClient(path=UNIX_MSG_SERVER_URI)
-        self.cmd_parser = CmdParser(self.msg_app_unix_client)
+        self.cmd_parser = CmdParser(self.msg_app_unix_client, self.page_list[PageListEnum.Media].get_media_engine())
         self.cmd_parser.unix_data_ready_to_send.connect(self.send_to_msg_server)
         QTimer.singleShot(0, lambda: asyncio.create_task(self.unix_server.start()))
         QTimer.singleShot(0, lambda: asyncio.create_task(self.msg_app_unix_client.connect()))
@@ -90,6 +96,11 @@ class CMainWindow(QMainWindow):
 
     def init_ui(self):
         log.debug("init_ui")
+        if FULL_SCREEN_UI:
+            # 設定視窗為全螢幕、無邊框、無標題列, Press Esc to exit
+            self.setWindowFlags(Qt.FramelessWindowHint)
+            self.showFullScreen()
+
         self.central_widget = QWidget(self)
         self.central_widget.setStyleSheet("background-color: black;")
 
