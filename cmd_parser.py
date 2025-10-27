@@ -46,8 +46,18 @@ class CmdParser(QObject):
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 
+    def get_file_list_handle_test(self, data:dict, str_len:int):
+        data['src'], data['dst'] = data['dst'], data['src']
+        data['data'] = gen_string(str_len)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
     def demo_get_mediafile_file_list(self, data:dict):
-        self.get_file_list_handle(data, MEDIAFILE_URI_PATH)
+        # self.get_file_list_handle(data, MEDIAFILE_URI_PATH)
+        # self.get_file_list_handle_test(data, 32768) # -> ok
+        # self.get_file_list_handle_test(data, 65535) # -> ok
+        self.get_file_list_handle_test(data, 4*1024)
+
 
     def demo_get_snapshots_file_list(self, data:dict):
         self.get_file_list_handle(data, SNAPSHOTS_URI_PATH)

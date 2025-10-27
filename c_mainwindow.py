@@ -56,7 +56,7 @@ class CMainWindow(QMainWindow):
         # self.timer.start()
 
     def send_to_msg_server(self, send_data:str):
-        log.debug("send_data:%s", send_data)
+        # log.debug("send_data:%s", send_data)
         self._periodic_unix_msg(send_data)
 
     # def _periodic_unix_msg(self, data: bytes):

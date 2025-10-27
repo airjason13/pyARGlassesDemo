@@ -8,8 +8,8 @@ LOG_FILE_PREFIX = "ar_glasses_demo.log"
 log = utils.log_utils.logging_init(__file__, LOG_FILE_PREFIX)
 
 
-FULL_SCREEN_UI = True
-ENG_UI = False
+FULL_SCREEN_UI = False
+ENG_UI = True
 
 
 
@@ -36,3 +36,5 @@ else:
     MEDIA_URI_PATH = "/root/MediaFiles/Media/"
     THUMBNAILS_URI_PATH = "/root/MediaFiles/thumbnails/"
     PLAYLISTS_URI_PATH = "/root/MediaFiles/Playlists/"
+
+UNIX_SOCKET_BUFFER_SIZE = 8*1024*1024

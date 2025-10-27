@@ -1,4 +1,7 @@
 import os
+import random
+import string
+
 from global_def import *
 import json
 
@@ -99,6 +102,10 @@ def list_files_by_ext(root_path: str, **kwargs) -> str:
 
     result = walk_dir(root_path)
     return json.dumps(result, indent=2, ensure_ascii=False)
+
+def gen_string(length: int) -> str:
+    chars = string.ascii_letters + string.digits  # A-Z, a-z, 0-9
+    return ''.join(random.choice(chars) for _ in range(length))
 
 
 # 範例：

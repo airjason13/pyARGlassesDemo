@@ -1,5 +1,6 @@
 import asyncio
 import os
+import socket
 from typing import Optional
 
 from PyQt5.QtCore import QObject, pyqtSignal
@@ -14,7 +15,8 @@ class UnixServer(QObject):
         self.path = path
         self._server: Optional[asyncio.base_events.Server] = None
         self._task: Optional[asyncio.Task] = None
-
+        self.snd_size = UNIX_SOCKET_BUFFER_SIZE # 4 * 1024 * 1024  # 4 MiB
+        self.rcv_size = UNIX_SOCKET_BUFFER_SIZE # 4 * 1024 * 1024
 
 
     async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
@@ -22,6 +24,9 @@ class UnixServer(QObject):
         peer_info = "unknown"
         if sock:
             try:
+                sock = self.writer.get_extra_info("socket")
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, self.snd_size)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, self.rcv_size)
                 uid, gid = sock.getpeereid()
                 peer_info = f"uid={uid}, gid={gid}"
             except AttributeError:
@@ -33,7 +38,7 @@ class UnixServer(QObject):
         log.debug("[UnixServer] + Connection from %s", peer_info)
         try:
             while True:
-                data = await reader.read(1024)
+                data = await reader.read(UNIX_SOCKET_BUFFER_SIZE)
                 if not data:
                     break
                 msg = data.decode(errors="ignore")
