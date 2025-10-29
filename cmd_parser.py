@@ -1,4 +1,5 @@
 from global_def import *
+from mediaengine.media_engine_def import PlayStatus_Dict
 from mediaengine.mediaengine import MediaEngine
 from utils.file_utils import *
 
@@ -13,13 +14,12 @@ class CmdParser(QObject):
         super().__init__()
         self.msg_unix_client = msg_unix_client
         self.media_engine = media_engine
+        self.media_engine.install_media_play_status_changed(self.media_engine_status_changed)
+        self.media_engine.install_media_engine_error_report(self.media_engine_error_report)
 
     def parse_cmds(self, data):
         log.debug("data : %s", data)
-
         d = dict(item.split(':', 1) for item in data.split(';'))
-
-
         if 'data' not in data:
             d['data'] = 'no_data'
         else:
@@ -53,10 +53,11 @@ class CmdParser(QObject):
         self.unix_data_ready_to_send.emit(reply)
 
     def demo_get_mediafile_file_list(self, data:dict):
-        # self.get_file_list_handle(data, MEDIAFILE_URI_PATH)
+        self.get_file_list_handle(data, MEDIAFILE_URI_PATH)
+        ''' for test transfer max size '''
         # self.get_file_list_handle_test(data, 32768) # -> ok
         # self.get_file_list_handle_test(data, 65535) # -> ok
-        self.get_file_list_handle_test(data, 4*1024)
+        # self.get_file_list_handle_test(data, 64*1024)
 
 
     def demo_get_snapshots_file_list(self, data:dict):
@@ -139,3 +140,27 @@ class CmdParser(QObject):
 
         DEMO_SET_TEST: demo_set_test,
     }
+
+    ''''''
+    def spec_cmd_pack(self, spec_cmd:str, spec_cmd_data:str):
+        data = {}
+        data['idx'] = 0
+        data['src'] = 'demo'
+        data['dst'] = 'mobile'
+        data['spec_cmd'] = spec_cmd
+        data['spec_cmd_data'] = spec_cmd_data
+        return data
+
+    def media_engine_status_changed(self, status: int):
+        log.debug(f"status : {PlayStatus_Dict.get(status)}")
+        str_status = PlayStatus_Dict.get(status)
+        reply_dict = self.spec_cmd_pack(DEMO_SPEC_MEDIAENGINE_STATUS_REPORT, str_status)
+        reply_str = ";".join(f"{k}:{v}" for k, v in reply_dict.items())
+        self.unix_data_ready_to_send.emit(reply_str)
+
+    def media_engine_error_report(self, reason: str):
+        log.debug(f"media_engine_error_report : {reason}")
+        reply_dict = self.spec_cmd_pack(DEMO_SPEC_MEDIAENGINE_CMD_ERROR_REPORT, reason)
+        reply_str = ";".join(f"{k}:{v}" for k, v in reply_dict.items())
+        self.unix_data_ready_to_send.emit(reply_str)
+

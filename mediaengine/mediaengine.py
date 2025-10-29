@@ -1,7 +1,9 @@
 import pathlib
+import platform
 import sys
 import os
 import shlex
+import errno
 import subprocess
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog,
@@ -17,6 +19,7 @@ class MediaEngine(QObject):
     qsignal_play_single_file_started = pyqtSignal()
     qsignal_play_single_file_paused = pyqtSignal()
     qsignal_media_play_status_changed = pyqtSignal(int)
+    qsignal_mediaengine_error_report = pyqtSignal(str)
 
     def __init__(self):
         super(MediaEngine, self).__init__()
@@ -29,6 +32,9 @@ class MediaEngine(QObject):
         self.media_engine_status = PlayStatus.IDLE
         log.warn("check still_image_play_period later")
         self.still_image_play_period = 30
+
+    def install_media_engine_error_report(self, slot_func):
+        self.qsignal_mediaengine_error_report.connect(slot_func)
 
     def install_media_play_status_changed(self, slot_func):
         self.qsignal_media_play_status_changed.connect(slot_func)
@@ -121,6 +127,8 @@ class MediaEngine(QObject):
         p = pathlib.Path(self._current_file)
         if not p.is_file():
             log.debug(f"single_play_from_cmd error, no such file:{self._current_file}")
+            self.qsignal_mediaengine_error_report.emit(os.strerror(errno.ENOENT).replace(" ", "_" ))
+            return
 
         self.single_play(self._current_file, p.suffix)
 
@@ -130,11 +138,17 @@ class MediaEngine(QObject):
         log.debug("Need to check play thread alive or not")
         abs_path = os.path.abspath(file_uri)
         if file_ext == ".mp4":
-            pipeline = f"filesrc location={shlex.quote(abs_path)} ! decodebin ! videoconvert ! waylandsink"
+            if platform.machine() == 'x86_64':
+                pipeline = f"filesrc location={shlex.quote(abs_path)} ! decodebin ! videoconvert ! autovideosink"
+            else:
+                pipeline = f"filesrc location={shlex.quote(abs_path)} ! decodebin ! videoconvert ! waylandsink"
             gst_cmd = ["gst-launch-1.0", "-e"] + shlex.split(pipeline)
             self._play_single_file_worker_with_cmd(gst_cmd, auto_kill_after=None)
         elif file_ext in ['jpg', 'jpeg', 'png', 'webp']:
-            pipeline = f"filesrc location={shlex.quote(abs_path)} ! decodebin ! imagefreeze ! videoconvert ! waylandsink"
+            if platform.machine() == 'x86_64':
+                pipeline = f"filesrc location={shlex.quote(abs_path)} ! decodebin ! imagefreeze ! videoconvert ! autovideosink"
+            else:
+                pipeline = f"filesrc location={shlex.quote(abs_path)} ! decodebin ! imagefreeze ! videoconvert ! waylandsink"
             gst_cmd = ["gst-launch-1.0", "-e"] + shlex.split(pipeline)
             self._play_single_file_worker_with_cmd(gst_cmd, auto_kill_after=self.still_image_play_period)
 
