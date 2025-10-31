@@ -124,7 +124,7 @@ class CmdParser(QObject):
         pathSubtitlFolder.mkdir(parents=True, exist_ok=True)
 
         pathSubtitlFile = Path(MEDIAFILE_URI_PATH + FILENAME_SUBTITLE)
-        if pathSubtitlFile.exists:
+        if pathSubtitlFile.exists():
             if pathSubtitlFile.is_file():
                 pathSubtitlFile.unlink()                # remove file
             else:
