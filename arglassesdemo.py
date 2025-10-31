@@ -17,6 +17,9 @@ async def main():
     window = CMainWindow(loop)
     window.show()  # 已經在 CMainWindow 裡面呼叫 showFullScreen
 
+    # signal.signal(signal.SIGINT, lambda s, f: on_sigint())
+    loop.add_signal_handler(signal.SIGINT, app.quit)
+
     with loop:
         loop.run_forever()
 
