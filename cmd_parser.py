@@ -6,7 +6,8 @@ from utils.file_utils import *
 from PyQt5.QtCore import QObject, pyqtSignal
 
 from unix_client import UnixClient
-
+import shutil
+from pathlib import Path
 
 class CmdParser(QObject):
     unix_data_ready_to_send = pyqtSignal(str)
@@ -117,6 +118,21 @@ class CmdParser(QObject):
         if data.get('data') == 'True':
             self.media_engine.resume_single_file_play()
 
+    def demo_set_mediaengine_render_subtitle(self, data:dict):
+        log.debug("data : %s", data.get('data'))
+        pathSubtitlFolder = Path(MEDIAFILE_URI_PATH)
+        pathSubtitlFolder.mkdir(parents=True, exist_ok=True)
+
+        pathSubtitlFile = Path(MEDIAFILE_URI_PATH + FILENAME_SUBTITLE)
+        if pathSubtitlFile.exists:
+            if pathSubtitlFile.is_file():
+                pathSubtitlFile.unlink()                # remove file
+            else:
+                shutil.rmtree(pathSubtitlFile)          # remove tree
+        pathSubtitlFile.touch()                         # create file
+        pathSubtitlFile.write_text(data.get('data'))
+        self.media_engine.render_subtitle_from_cmd()
+
     def demo_set_test(self, data: dict):
         data['src'], data['dst'] = data['dst'], data['src']
         log.debug("data : %s", data)
@@ -137,6 +153,8 @@ class CmdParser(QObject):
         DEMO_SET_MEDIAENGINE_PAUSE: demo_set_mediaengine_pause,
         DEMO_SET_MEDIAENGINE_STOP: demo_set_mediaengine_stop,
         DEMO_SET_MEDIAENGINE_RESUME_PLAYING: demo_set_mediaengine_resume_playing,
+
+        DEMO_SET_MEDIAENGINE_RENDER_SUBTITLE: demo_set_mediaengine_render_subtitle,
 
         DEMO_SET_TEST: demo_set_test,
     }
