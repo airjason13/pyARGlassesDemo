@@ -4,6 +4,7 @@ import utils.log_utils
 from version import Version
 from arglassescmd.cmd_def import *
 LOG_FILE_PREFIX = "ar_glasses_demo.log"
+FILENAME_SUBTITLE = 'subtitle.txt'
 
 log = utils.log_utils.logging_init(__file__, LOG_FILE_PREFIX)
 
