@@ -8,9 +8,12 @@ FILENAME_SUBTITLE = 'subtitle.txt'
 
 log = utils.log_utils.logging_init(__file__, LOG_FILE_PREFIX)
 
-
-FULL_SCREEN_UI = False
-ENG_UI = True
+if platform.machine() == 'x86_64':
+    FULL_SCREEN_UI = False
+    ENG_UI = True
+else:
+    FULL_SCREEN_UI = True
+    ENG_UI = False
 
 
 
@@ -30,6 +33,7 @@ if platform.machine() == 'x86_64':
     MEDIA_URI_PATH = "/home/venom/Videos/Media/"
     THUMBNAILS_URI_PATH = "/home/venom/Videos/thumbnails/"
     PLAYLISTS_URI_PATH = "/home/venom/Videos/playlists/"
+    PERSIST_CONFIG_URI_PATH = "/home/venom/Videos/persist/"
 else:
     MEDIAFILE_URI_PATH = "/root/MediaFiles/"
     SNAPSHOTS_URI_PATH = "/root/MediaFiles/Snapshots/"
@@ -37,5 +41,6 @@ else:
     MEDIA_URI_PATH = "/root/MediaFiles/Media/"
     THUMBNAILS_URI_PATH = "/root/MediaFiles/thumbnails/"
     PLAYLISTS_URI_PATH = "/root/MediaFiles/Playlists/"
+    PERSIST_CONFIG_URI_PATH = "/root/persist_config/"
 
 UNIX_SOCKET_BUFFER_SIZE = 8*1024*1024
