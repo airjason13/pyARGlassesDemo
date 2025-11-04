@@ -137,6 +137,114 @@ class CmdParser(QObject):
         data['src'], data['dst'] = data['dst'], data['src']
         log.debug("data : %s", data)
 
+    # =========================
+    # === Playlist Commands ===
+    # =========================
+    def demo_set_playlist_create(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        result = self.media_engine.playlist_create(data.get("data"))
+        # Dict to Str
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_set_playlist_select(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        result = self.media_engine.playlist_select(data.get("data"))
+        # Dict to Str
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_get_playlist_get_all(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        result = self.media_engine.playlist_get_all()
+        # Dict to Str
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_set_playlist_add_item(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        result = self.media_engine.playlist_add_item(data.get("data"))
+        # Dict to Str
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_set_playlist_remove_item(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        result = self.media_engine.playlist_remove_item(data.get("data"))
+        # Dict to Str
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_get_playlist_get_list(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        result = self.media_engine.playlist_get_current_list(data.get("data"))
+        # Dict to Str
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_set_playlist_play(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        if data.get('data') == 'True':
+            result = self.media_engine.playlist_play()
+        else :
+            result = {"status": "NG", "error": "playing playlist"}
+
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_set_playlist_stop(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        if data.get('data') == 'True':
+            result = self.media_engine.playlist_stop()
+        else :
+            result = {"status": "NG", "error": "stopped playlist"}
+
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_set_playlist_remove_playlist(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        result = self.media_engine.playlist_remove_playlist(data.get("data"))
+
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_set_playlist_next(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        if data.get('data') == 'True':
+            result = self.media_engine.playlist_skip_next()
+        else:
+            result = {"status": "NG", "error": "cannot skip to next"}
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_set_playlist_prev(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        if data.get('data') == 'True':
+            result = self.media_engine.playlist_skip_prev()
+        else:
+            result = {"status": "NG", "error": "cannot skip to prev"}
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_get_playlist_get_item(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        result = self.media_engine.playlist_get_current_file()
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
     cmd_function_map = {
         DEMO_GET_SW_VERSION: demo_get_sw_version,
         DEMO_GET_MEDIAFILE_FILE_LIST: demo_get_mediafile_file_list,
@@ -155,6 +263,19 @@ class CmdParser(QObject):
         DEMO_SET_MEDIAENGINE_RESUME_PLAYING: demo_set_mediaengine_resume_playing,
 
         DEMO_SET_MEDIAENGINE_RENDER_SUBTITLE: demo_set_mediaengine_render_subtitle,
+
+        DEMO_SET_PLAYLIST_CREATE: demo_set_playlist_create,
+        DEMO_SET_PLAYLIST_SELECT: demo_set_playlist_select,
+        DEMO_GET_PLAYLIST_GET_ALL: demo_get_playlist_get_all,
+        DEMO_SET_PLAYLIST_ADD_ITEM: demo_set_playlist_add_item,
+        DEMO_SET_PLAYLIST_REMOVE_ITEM: demo_set_playlist_remove_item,
+        DEMO_GET_PLAYLIST_GET_LIST: demo_get_playlist_get_list,
+        DEMO_SET_PLAYLIST_PLAY: demo_set_playlist_play,
+        DEMO_SET_PLAYLIST_STOP: demo_set_playlist_stop,
+        DEMO_SET_PLAYLIST_REMOVE_PLAYLIST: demo_set_playlist_remove_playlist,
+        DEMO_SET_PLAYLIST_NEXT_ITEM: demo_set_playlist_next,
+        DEMO_SET_PLAYLIST_PREV_ITEM: demo_set_playlist_prev,
+        DEMO_GET_PLAYLIST_GET_ITEM: demo_get_playlist_get_item,
 
         DEMO_SET_TEST: demo_set_test,
     }

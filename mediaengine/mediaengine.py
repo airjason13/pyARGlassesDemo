@@ -11,9 +11,12 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt, QTimer
 from global_def import *
+from mediaengine.PlaylistManager import PlaylistManager
 from mediaengine.gst_subproc_player import GstSingleFileWorker
 from mediaengine.gstSubtitleRenderer import GstSubtitleWorker
 from mediaengine.media_engine_def import *
+
+from PyQt5.QtCore import QMutex, QMutexLocker
 
 class MediaEngine(QObject):
     qsignal_play_single_file_finished = pyqtSignal(str)  # success, reason
@@ -25,14 +28,19 @@ class MediaEngine(QObject):
     def __init__(self):
         super(MediaEngine, self).__init__()
         # worker/thread holders
+        self._playlist_index = None
+        self._playlist_files = None
+        self._current_playlist = None
         self.play_single_file_thread = None
         self.play_single_file_worker = None
+        self.playlist_mgr = PlaylistManager(PLAYLISTS_URI_PATH)
         self._current_file = 'None'
-        self._current_playlist = 'None'
+        # self._current_playlist = 'None'
         # need to get default from config file
         self.media_engine_status = PlayStatus.IDLE
         log.warn("check still_image_play_period later")
         self.still_image_play_period = 30
+        self._cancel_auto_next_once = False
 
     def install_media_engine_error_report(self, slot_func):
         self.qsignal_mediaengine_error_report.connect(slot_func)
@@ -146,24 +154,24 @@ class MediaEngine(QObject):
         if not p.is_file():
             return "None"
         return p.stem
-
+    '''
     def get_current_playlist(self) -> str:
         p = pathlib.Path(self._current_playlist)
         if not p.is_file():
             return "None"
         return p.stem
-
+    '''
     def set_still_image_play_period(self, still_image_play_period: int):
         self.still_image_play_period = still_image_play_period
 
     def set_current_file(self, sub_file_uri: str):
         self._current_file = MEDIAFILE_URI_PATH + sub_file_uri
         log.debug(f"self._current_file :{self._current_file}")
-
+    '''
     def set_current_playlist(self, sub_playlist: str):
         self._current_playlist = PLAYLISTS_URI_PATH + sub_playlist
         log.debug(f"self._current_playlist :{self._current_playlist}")
-
+    '''
     def single_play_from_cmd(self):
         p = pathlib.Path(self._current_file)
         if not p.is_file():
@@ -218,3 +226,224 @@ class MediaEngine(QObject):
         log.debug("resume_single_file_play")
         if self.play_single_file_worker and self.play_single_file_thread.isRunning():
             self.play_single_file_worker.resume_if_running()
+
+    # ---------------- Playlist control ----------------
+    def playlist_create(self, name: str) -> dict:
+        return self.playlist_mgr.create(name)
+
+    def playlist_select(self, name: str) -> dict:
+        result = self.playlist_mgr.select(name)
+
+        if result.get("status") == "OK":
+            self._current_playlist = self.playlist_mgr.current_list
+            log.info(f"[Playlist] Selected playlist: {self._current_playlist}")
+
+        return result
+
+    def playlist_get_all(self) -> dict:
+        return self.playlist_mgr.get_all()
+
+    def playlist_add_item(self, filename: str) -> dict:
+        return self.playlist_mgr.add_item(filename)
+
+    def playlist_remove_item(self, filename: str) -> dict:
+        return self.playlist_mgr.remove_item(filename)
+
+    def playlist_get_current_list(self, name: str | None = None) -> dict:
+        return self.playlist_mgr.get_current_list(name)
+
+    def playlist_remove_playlist(self, name: str) -> dict:
+        return self.playlist_mgr.remove_playlist(name)
+
+    def playlist_play(self) -> dict:
+        try:
+            if self.play_single_file_thread and self.play_single_file_thread.isRunning():
+                log.debug("[Playlist] Old thread still running, stopping it first.")
+                if self.play_single_file_worker:
+                    self.play_single_file_worker.stop_if_running()
+                self.play_single_file_thread.quit()
+                self.play_single_file_thread.wait(500)
+        except RuntimeError:
+            log.warning("[Playlist] play_single_file_thread was already deleted, resetting.")
+        except Exception as e:
+            log.warning(f"[Playlist] Error while resetting old thread: {e}")
+
+        self.play_single_file_thread = None
+        self.play_single_file_worker = None
+
+        # --- Verify Playlist ---
+        if not self.playlist_mgr or not self.playlist_mgr.current_list:
+            return {"status": "NG", "error": "No playlist selected"}
+
+        self._current_playlist = self.playlist_mgr.current_list
+
+        files_buffer = self.playlist_mgr.get_files_in_current_list().get("files", [])
+        if not files_buffer:
+            return {"status": "NG", "error": f"Playlist '{self.playlist_mgr.current_list}' is empty"}
+
+        # --- Initialize playback status ---
+        self._playlist_files = files_buffer
+        self._playlist_index = 0
+
+        # Ensure that the signal is not repeatedly connected
+        try:
+            self.qsignal_play_single_file_finished.disconnect(self._handle_playlist_auto_next)
+        except Exception:
+            pass
+        self.qsignal_play_single_file_finished.connect(self._handle_playlist_auto_next)
+
+        log.info(f"[Playlist] Start playing list: {self.playlist_mgr.current_list}, total: {len(files_buffer)}")
+        self._playlist_play_item()
+
+        return {"status": "OK", "playing": self.playlist_mgr.current_list, "count": len(files_buffer)}
+
+    def _playlist_play_item(self):
+        # --- Prevent Qt thread from being referenced even after it has been deleted ---
+        if not hasattr(self, "play_single_file_thread") or self.play_single_file_thread is None:
+            self.play_single_file_thread = None
+        else:
+            try:
+                _ = self.play_single_file_thread.isRunning()
+            except RuntimeError:
+                log.warning("[Playlist] play_single_file_thread was deleted, resetting.")
+                self.play_single_file_thread = None
+
+        # --- Verify playlist status ---
+        if not hasattr(self, "_playlist_files") or not self._playlist_files:
+            log.warning("[Playlist] No active playlist files.")
+            return
+
+        if self._playlist_index >= len(self._playlist_files):
+            log.info("[Playlist] All files finished.")
+            # Clean signal
+            try:
+                self.qsignal_play_single_file_finished.disconnect(self._handle_playlist_auto_next)
+            except Exception:
+                pass
+            self._playlist_files = []
+            self._playlist_index = 0
+            return
+
+        # --- Ensure the previous thread ends normally ---
+        if self.play_single_file_thread and self.play_single_file_thread.isRunning():
+            log.debug("[Playlist] Waiting previous thread to finish...")
+            self.play_single_file_thread.quit()
+            self.play_single_file_thread.wait(500)
+
+        # --- Play the currently indexed video ---
+        f = self._playlist_files[self._playlist_index].lstrip("/")
+        abs_path = os.path.join(MEDIAFILE_URI_PATH, f)
+        if not os.path.exists(abs_path):
+            log.warning(f"[Playlist] File not found: {abs_path}")
+            self._playlist_index += 1
+            self._playlist_play_item()
+            return
+
+        p = pathlib.Path(abs_path)
+        log.info(f"[Playlist] Playing ({self._playlist_index+1}/{len(self._playlist_files)}): {p}")
+        self.single_play(str(p), p.suffix)
+
+    def _handle_playlist_auto_next(self, reason):
+        if self._cancel_auto_next_once:
+            log.debug("[Playlist] Cancel auto next once (manual skip)")
+            self._cancel_auto_next_once = False
+            return
+
+        if not hasattr(self, "_playlist_files") or not self._playlist_files:
+            log.debug("[Playlist] No playlist active when finished callback triggered.")
+            return
+        self._playlist_index += 1
+        if self._playlist_index >= len(self._playlist_files):
+            log.info("[Playlist] Reached end of playlist, restarting from first item.")
+            self._playlist_index = 0
+        self._playlist_play_item()
+
+    def playlist_skip_next(self):
+        self._cancel_auto_next_once = True
+        if not hasattr(self, "_playlist_files") or not self._playlist_files:
+            log.warning("[Playlist] No playlist is currently playing.")
+            return {"status": "NG", "error": "No active playlist"}
+
+        # Stop the current playback
+        if self.play_single_file_worker:
+            try:
+                log.info("[Playlist] Skipping current file...")
+                self.play_single_file_worker.stop_if_running()
+            except Exception as e:
+                log.warning(f"[Playlist] stop_if_running exception: {e}")
+
+        self._playlist_index += 1
+        if self._playlist_index >= len(self._playlist_files):
+            log.info("[Playlist] Already at last item.")
+            self._playlist_index = 0
+            # return {"status": "OK", "message": "Reached end of playlist"}
+
+        log.info(f"[Playlist] Moving to next ({self._playlist_index+1}/{len(self._playlist_files)})")
+        self._playlist_play_item()
+        return {"status": "OK", "message": "Next item started"}
+
+    def playlist_skip_prev(self) -> dict:
+        self._cancel_auto_next_once = True
+        if not hasattr(self, "_playlist_files") or not self._playlist_files:
+            log.warning("[Playlist] No playlist is currently playing.")
+            return {"status": "NG", "error": "No active playlist"}
+
+        # Stop the current playback
+        if self.play_single_file_worker:
+            try:
+                log.info("[Playlist] Going to previous file, stopping current player...")
+                self.play_single_file_worker.stop_if_running()
+            except Exception as e:
+                log.warning(f"[Playlist] stop_if_running exception: {e}")
+
+        self._playlist_index -= 1
+        if self._playlist_index < 0:
+            log.info("[Playlist] Already at first item, looping to last one.")
+            self._playlist_index = len(self._playlist_files) - 1
+            # return {"status": "OK", "message": "Reached beginning of playlist"}
+
+        log.info(f"[Playlist] Moving to previous ({self._playlist_index+1}/{len(self._playlist_files)})")
+        self._playlist_play_item()
+        return {"status": "OK", "message": "Previous item started"}
+
+    def playlist_stop(self) -> dict:
+        log.info("[Playlist] Stop requested")
+
+        # Stop the currently playing video
+        if self.play_single_file_worker:
+            try:
+                self.play_single_file_worker.stop_if_running()
+            except Exception as e:
+                log.warning(f"[Playlist] stop_if_running exception: {e}")
+
+        # Reset playlist status
+        self._playlist_files = []
+        self._playlist_index = 0
+
+        # Disconnect the playback end event to avoid accidentally touching the next song
+        try:
+            self.qsignal_play_single_file_finished.disconnect(self._handle_playlist_auto_next)
+        except Exception:
+            pass
+
+        # Status Update
+        self.media_engine_status = PlayStatus.IDLE
+        self.qsignal_media_play_status_changed.emit(self.media_engine_status)
+
+        return {"status": "OK", "message": "Playlist stopped"}
+
+    def playlist_get_current_file(self) -> dict:
+        if not hasattr(self, "_playlist_files") or not self._playlist_files:
+            return {"status": "NG","error": "No file is currently playing. Start playback to view current item."}
+
+        if self._playlist_index is None or self._playlist_index >= len(self._playlist_files):
+            return {"status": "NG", "error": "No active playing item"}
+
+        current_file = self._playlist_files[self._playlist_index]
+        return {
+            "status": "OK",
+            "playlist": self._current_playlist,
+            "index": self._playlist_index,
+            "current_file": current_file
+        }
+

@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QApplicat
 from PyQt5.QtCore import Qt, QTimer
 
 from ui_pages.ui_eng_test_page import EngPage
+from ui_pages.ui_playlist_page import PlaylistPage
 from unix_server import UnixServer
 from unix_client import UnixClient
 from cmd_parser import CmdParser
@@ -15,18 +16,25 @@ from ui_pages.ui_video_setting_page import VideoSettingPage
 
 class PageListEnum(enum.IntEnum):
     Media = 0
-    Video_Setting = 1
-    Eng = 2
+    Playlist = 1
+    Video_Setting = 2
+    Eng = 3
 
-Page_Select_Btn_Name_List = ["Media", "Video_Setting", "Eng"]
-Page_List = [MediaPage, VideoSettingPage, EngPage]
+Page_Select_Btn_Name_List = ["Media", "Playlist" ,"Video_Setting", "Eng"]
+Page_List = [MediaPage, # 0
+             PlaylistPage, # 1
+             VideoSettingPage, # 2
+             EngPage, # 3
+             ]
 
-Page_Map = dict(zip(Page_Select_Btn_Name_List, Page_List))
+# Page_Map = dict(zip(Page_Select_Btn_Name_List, Page_List))
 
 class CMainWindow(QMainWindow):
     TEST_FLAG = False # For Eng Page Show socket cmd
     def __init__(self, async_loop):
         super().__init__()
+        self.playlist_mgr = None
+        self.label = None
         log.debug("MainWindow up!")
         self.async_loop = async_loop
         self.page_list = []
@@ -106,12 +114,12 @@ class CMainWindow(QMainWindow):
 
         self.setCentralWidget(self.central_widget)
         self.page_layout = QStackedLayout()
-        for k, v in Page_Map.items():
-            page = v(self, self.central_widget)
 
+        for page_cls in Page_List:
+            page = page_cls(self, self.central_widget)
             self.page_list.append(page)
-
             self.page_layout.addWidget(page)
+
         self.central_widget.setLayout(self.page_layout)
         self.page_layout.setCurrentIndex(0)
         # for p in self.page_list:
@@ -151,15 +159,9 @@ class CMainWindow(QMainWindow):
         if event.key() == Qt.Key_Escape:
             asyncio.create_task(self.shutdown_and_quit())
         elif event.key() == Qt.Key_P:
-            log.debug("before, self.page_layout.currentIndex() : %d", self.page_layout.currentIndex())
-
-            if self.page_layout.currentIndex() == 1:
-                self.page_layout.setCurrentIndex(0)
-            else:
-                self.page_layout.setCurrentIndex(1)
-            # log.debug("self.current_page_idx : %d", self.current_page_idx)
-            log.debug("self.page_layout.currentIndex() : %d", self.page_layout.currentIndex())
-
+            next_index = (self.page_layout.currentIndex() + 1) % self.page_layout.count()
+            log.debug("next, page_layout : %d", next_index)
+            self.page_layout.setCurrentIndex(next_index)
 
     # ---- 關閉流程：非同步 ----
     async def shutdown_and_quit(self):
