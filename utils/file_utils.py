@@ -1,6 +1,7 @@
 import os
 import random
 import string
+from pathlib import Path
 
 from global_def import *
 import json
@@ -106,6 +107,49 @@ def list_files_by_ext(root_path: str, **kwargs) -> str:
 def gen_string(length: int) -> str:
     chars = string.ascii_letters + string.digits  # A-Z, a-z, 0-9
     return ''.join(random.choice(chars) for _ in range(length))
+
+def get_persist_config_int(persist_filename: str, def_value: int) -> int :
+    path_persist_folder = Path(PERSIST_CONFIG_URI_PATH)
+    path_persist_folder.mkdir(parents=True, exist_ok=True)
+    target_persist_uri = Path(os.path.join(PERSIST_CONFIG_URI_PATH, persist_filename))
+    if not target_persist_uri.exists():
+        target_persist_uri.touch()
+        target_persist_uri.write_text(str(def_value))
+
+    str_value = target_persist_uri.read_text()
+
+    return int(str_value)
+
+def get_persist_config_str(persist_filename: str, def_value: str) -> str:
+    path_persist_folder = Path(PERSIST_CONFIG_URI_PATH)
+    path_persist_folder.mkdir(parents=True, exist_ok=True)
+    target_persist_uri = Path(os.path.join(PERSIST_CONFIG_URI_PATH, persist_filename))
+    if not target_persist_uri.exists():
+        target_persist_uri.touch()
+        target_persist_uri.write_text(def_value)
+
+    str_value = target_persist_uri.read_text()
+
+    return str_value
+
+def set_persist_config_int(persist_filename: str, def_value: int) -> None:
+    path_persist_folder = Path(PERSIST_CONFIG_URI_PATH)
+    path_persist_folder.mkdir(parents=True, exist_ok=True)
+    target_persist_uri = Path(os.path.join(PERSIST_CONFIG_URI_PATH, persist_filename))
+    if not target_persist_uri.exists():
+        target_persist_uri.touch()
+    target_persist_uri.write_text(str(def_value))
+
+def set_persist_config_str(persist_filename: str, def_value: str) -> None:
+    path_persist_folder = Path(PERSIST_CONFIG_URI_PATH)
+    path_persist_folder.mkdir(parents=True, exist_ok=True)
+    target_persist_uri = Path(os.path.join(PERSIST_CONFIG_URI_PATH, persist_filename))
+    if not target_persist_uri.exists():
+        target_persist_uri.touch()
+    target_persist_uri.write_text(def_value)
+
+
+
 
 
 # 範例：

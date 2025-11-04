@@ -1,22 +1,23 @@
+import errno
+import json
+import os
 import pathlib
 import platform
 import sys
 import os
 import shlex
-import errno
-import subprocess
-from PyQt5.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog,
-    QLabel, QSpinBox, QHBoxLayout, QMessageBox
-)
-from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt, QTimer
-from global_def import *
-from mediaengine.PlaylistManager import PlaylistManager
-from mediaengine.gst_subproc_player import GstSingleFileWorker
-from mediaengine.gstSubtitleRenderer import GstSubtitleWorker
-from mediaengine.media_engine_def import *
+import time
 
-from PyQt5.QtCore import QMutex, QMutexLocker
+from utils.file_utils import get_persist_config_int, set_persist_config_int
+from PyQt5.QtCore import QObject, pyqtSignal, QThread, QTimer
+
+from global_def import *
+from .gstSubtitleRenderer import GstSubtitleWorker
+from .gst_subproc_player import GstSingleFileWorker
+from .media_engine_def import *
+from ext_qobjects.system_file_watcher import FileWatcher
+
+from mediaengine.PlaylistManager import PlaylistManager
 
 class MediaEngine(QObject):
     qsignal_play_single_file_finished = pyqtSignal(str)  # success, reason
@@ -37,10 +38,23 @@ class MediaEngine(QObject):
         self._current_file = 'None'
         # self._current_playlist = 'None'
         # need to get default from config file
+        self._cancel_auto_next_once = False
+
         self.media_engine_status = PlayStatus.IDLE
         log.warn("check still_image_play_period later")
-        self.still_image_play_period = 30
-        self._cancel_auto_next_once = False
+        self.still_image_play_period = get_persist_config_int(PERSIST_STILL_IMAGE_PLAY_PERIOD_CONFIG_FILENAME,
+                                                              DEFAULT_STILL_IMAGE_PLAY_PERIOD_INT)
+        # log.debug("still image playing period is %d", self.still_image_play_period)
+        self.still_image_play_period_file_watcher = FileWatcher(
+                                                        [os.path.join(PERSIST_CONFIG_URI_PATH,
+                                                        PERSIST_STILL_IMAGE_PLAY_PERIOD_CONFIG_FILENAME)])
+        self.still_image_play_period_file_watcher.install_file_changed_slot(self.refresh_still_image_play_period)
+
+
+    def refresh_still_image_play_period(self):
+        self.still_image_play_period = get_persist_config_int(PERSIST_STILL_IMAGE_PLAY_PERIOD_CONFIG_FILENAME,
+                                                              DEFAULT_STILL_IMAGE_PLAY_PERIOD_INT)
+        log.debug("still image play_period : %s", self.still_image_play_period)
 
     def install_media_engine_error_report(self, slot_func):
         self.qsignal_mediaengine_error_report.connect(slot_func)
@@ -161,8 +175,20 @@ class MediaEngine(QObject):
             return "None"
         return p.stem
     '''
-    def set_still_image_play_period(self, still_image_play_period: int):
-        self.still_image_play_period = still_image_play_period
+    def set_still_image_play_period(self, _still_image_play_period: int):
+        # Change to write to file
+        # self.still_image_play_period = still_image_play_period
+        if _still_image_play_period not in range(DEFAULT_STILL_IMAGE_PLAY_PERIOD_INT_MIN,
+                                                  DEFAULT_STILL_IMAGE_PLAY_PERIOD_INT_MAX):
+            error_data = {"func": self.set_still_image_play_period.__name__,
+                          "reason": os.strerror(errno.EINVAL).replace(" ", "_")}
+            log.error(error_data)
+            json_error_data = json.dumps(error_data)
+            self.qsignal_mediaengine_error_report.emit(json_error_data)
+            return
+
+        log.debug(f"set_still_image_play_period:{_still_image_play_period}")
+        set_persist_config_int(PERSIST_STILL_IMAGE_PLAY_PERIOD_CONFIG_FILENAME, _still_image_play_period)
 
     def set_current_file(self, sub_file_uri: str):
         self._current_file = MEDIAFILE_URI_PATH + sub_file_uri
@@ -175,8 +201,11 @@ class MediaEngine(QObject):
     def single_play_from_cmd(self):
         p = pathlib.Path(self._current_file)
         if not p.is_file():
-            log.debug(f"single_play_from_cmd error, no such file:{self._current_file}")
-            self.qsignal_mediaengine_error_report.emit(os.strerror(errno.ENOENT).replace(" ", "_" ))
+            error_data = {"func": self.single_play_from_cmd.__name__,
+                          "reason": os.strerror(errno.ENOENT).replace(" ", "_")}
+            json_error_data = json.dumps(error_data)
+            log.error(error_data)
+            self.qsignal_mediaengine_error_report.emit(json_error_data)
             return
 
         self.single_play(self._current_file, p.suffix)
