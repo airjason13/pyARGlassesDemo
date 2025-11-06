@@ -13,6 +13,9 @@ class PlaylistPage(QWidget):
 
     def __init__(self, _main_window, _central_qwidget, **kwargs):
         super(PlaylistPage, self).__init__(**kwargs)
+        self.btn_expand_all_playlists = None
+        self.btn_remove_batch_items = None
+        self.btn_add_batch_items = None
         self.test_sock_cmd = False
         self.btn_get_item = None
         self.btn_prev = None
@@ -120,6 +123,21 @@ class PlaylistPage(QWidget):
         self.btn_remove_playlist = QPushButton("🗑 Remove\n刪除清單")
         layout.addLayout(make_row(self.btn_get_all, self.btn_get_list, self.btn_get_item, self.btn_remove_playlist))
 
+        # --- Section 4: Test Playlist Batch Commands ---
+        section4 = QLabel("🧪 Playlist Batch Commands")
+        section4.setStyleSheet("color: lightgreen; font-weight: bold; font-size: 16px;")
+        layout.addWidget(section4)
+
+        self.btn_add_batch_items = QPushButton("➕ Add Batch Items\n批次清單新增")
+        self.btn_remove_batch_items = QPushButton("❌ Remove Batch Items\n批次清單移除")
+        self.btn_expand_all_playlists = QPushButton("📂 Expand All Playlists\n展開全部清單")
+
+        layout.addLayout(make_row(
+            self.btn_add_batch_items,
+            self.btn_remove_batch_items,
+            self.btn_expand_all_playlists
+        ))
+
         # --- Output Area ---
         self.text_output = QTextEdit()
         self.text_output.setReadOnly(True)
@@ -146,6 +164,9 @@ class PlaylistPage(QWidget):
         self.btn_next.clicked.connect(self.on_next)
         self.btn_prev.clicked.connect(self.on_prev)
         self.btn_get_item.clicked.connect(self.on_get_item)
+        self.btn_add_batch_items.clicked.connect(self.on_add_batch_items)
+        self.btn_remove_batch_items.clicked.connect(self.on_remove_batch_items)
+        self.btn_expand_all_playlists.clicked.connect(self.on_get_playlist_expand_all)
 
         # --- Final layout setup ---
         layout.addSpacing(10)
@@ -227,3 +248,50 @@ class PlaylistPage(QWidget):
     def on_get_item(self):
         result = self.media_engine.playlist_get_current_file()
         self.output_result(result)
+
+    # --- Section 4: Test Batch-Playlist Commands ---
+    def on_add_batch_items(self):
+        parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
+        test_data = {
+            "src": "mobile",
+            "dst": "demo",
+            "data": json.dumps({
+                "playlists": [
+                    {"name": "rock", "files": ["song1.mp4", "song2.mp4"]},
+                    {"name": "jazz", "files": ["jazz1.mp4"]}
+                ]
+            }, ensure_ascii=False)
+        }
+        parser.unix_data_ready_to_send.connect(
+            lambda msg: self.text_output.setPlainText(msg)
+        )
+        parser.demo_set_playlist_add_batch(test_data)
+
+    def on_remove_batch_items(self):
+        parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
+        test_data = {
+            "src": "mobile",
+            "dst": "demo",
+            "data": json.dumps({
+                "playlists": [
+                    {"name": "rock", "files": ["song1.mp4", "song2.mp4"]},
+                    {"name": "jazz", "files": ["jazz1.mp4"]}
+                ]
+            }, ensure_ascii=False)
+        }
+        parser.unix_data_ready_to_send.connect(
+            lambda msg: self.text_output.setPlainText(msg)
+        )
+        parser.demo_set_playlist_remove_batch(test_data)
+
+    def on_get_playlist_expand_all(self):
+        parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
+        test_data = {
+            "src": "mobile",
+            "dst": "demo",
+            "data": "{}"
+        }
+        parser.unix_data_ready_to_send.connect(
+            lambda msg: self.text_output.setPlainText(msg)
+        )
+        parser.demo_get_playlist_expand_all(test_data)

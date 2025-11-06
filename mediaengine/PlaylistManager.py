@@ -55,8 +55,10 @@ class PlaylistManager:
         if not filename or not filename.strip():
             return {"status": "NG", "error": "Invalid filename"}
         data = self._load(self.current_list)
+        '''
         if filename in data["files"]:
             return {"status": "NG", "error": f"'{filename}' already in playlist '{self.current_list}'"}
+        '''
         data["files"].append(filename)
         self._save(self.current_list, data)
         return {"status": "OK", "added": filename, "list": self.current_list}
@@ -103,5 +105,56 @@ class PlaylistManager:
             if self.current_list == name:
                 self.current_list = None
             return {"status": "OK", "removed": name}
+        except Exception as e:
+            return {"status": "NG", "error": str(e)}
+
+    def add_item_to_target_playlist(self, playlist_name: str, filename: str):
+        if not playlist_name or not playlist_name.strip():
+            return {"status": "NG", "error": "Invalid playlist name"}
+        if not filename or not filename.strip():
+            return {"status": "NG", "error": "Invalid filename"}
+
+        p = self._path(playlist_name)
+
+        try:
+            # If the list does not exist, it will be created automatically.
+            if not os.path.exists(p):
+                self._save(playlist_name, {"name": playlist_name, "files": []})
+
+            # load playlist data
+            data = self._load(playlist_name)
+            '''
+            # Check if the item is duplicated
+            if filename in data.get("files", []):
+                return {"status": "NG", "error": f"'{filename}' already in playlist '{playlist_name}'"}
+            '''
+            # AddItem
+            data["files"].append(filename)
+            self._save(playlist_name, data)
+            return {"status": "OK", "playlist": playlist_name, "added": filename}
+
+        except Exception as e:
+            return {"status": "NG", "error": str(e)}
+
+    def remove_item_to_target_playlist(self, playlist_name: str, filename: str):
+        if not playlist_name or not playlist_name.strip():
+            return {"status": "NG", "error": "Invalid playlist name"}
+        if not filename or not filename.strip():
+            return {"status": "NG", "error": "Invalid filename"}
+
+        p = self._path(playlist_name)
+        if not os.path.exists(p):
+            return {"status": "NG", "error": f"Playlist '{playlist_name}' not found"}
+
+        try:
+
+            data = self._load(playlist_name)
+            files = data.get("files", [])
+            if filename not in files:
+                return {"status": "NG", "error": f"'{filename}' not in playlist '{playlist_name}'"}
+
+            files.remove(filename)
+            self._save(playlist_name, data)
+            return {"status": "OK", "playlist": playlist_name, "removed": filename}
         except Exception as e:
             return {"status": "NG", "error": str(e)}
