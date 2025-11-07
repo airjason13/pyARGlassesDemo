@@ -286,8 +286,8 @@ class CmdParser(QObject):
         data['idx'] = 0
         data['src'] = 'demo'
         data['dst'] = 'mobile'
-        data['spec_cmd'] = spec_cmd
-        data['spec_cmd_data'] = spec_cmd_data
+        data['cmd'] = spec_cmd
+        data['data'] = spec_cmd_data
         return data
 
     def media_engine_status_changed(self, status: int):

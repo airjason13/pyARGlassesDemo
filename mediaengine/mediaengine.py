@@ -85,18 +85,26 @@ class MediaEngine(QObject):
         self.play_single_file_thread = QThread()
         self.play_single_file_worker.moveToThread(self.play_single_file_thread)
         self.play_single_file_thread.started.connect(self.play_single_file_worker.run)
-        self.play_single_file_worker.gst_single_file_play_proc_finished.connect(self._on_play_single_file_worker_finished)
-        self.play_single_file_worker.gst_single_file_play_proc_started.connect(self._on_play_single_file_worker_started)
+        # self.play_single_file_worker.gst_single_file_play_proc_finished.connect(self._on_play_single_file_worker_finished)
+        # self.play_single_file_worker.gst_single_file_play_proc_started.connect(self._on_play_single_file_worker_started)
+        self.play_single_file_worker.install_gst_single_file_play_proc_finished(self._on_play_single_file_worker_finished)
+        self.play_single_file_worker.install_gst_single_file_play_proc_started(self._on_play_single_file_worker_started)
         self.play_single_file_worker.install_gst_single_file_play_proc_paused(self._on_play_single_file_worker_paused)
         self.play_single_file_worker.install_gst_single_file_play_proc_status(self._on_play_single_file_worker_status)
         # cleanup when thread finishes
-        self.play_single_file_worker.gst_single_file_play_proc_finished.connect(lambda ok, reason: self.play_single_file_thread.quit())
+        # self.play_single_file_worker.gst_single_file_play_proc_finished.connect(lambda ok, reason: self.play_single_file_thread.quit())
         self.play_single_file_thread.finished.connect(self.play_single_file_thread.deleteLater)
         self.play_single_file_thread.start()
 
     def _on_play_single_file_worker_finished(self, result, reason):
         log.debug(f"_on_play_single_file_worker_finished res:{result}")
         self.qsignal_play_single_file_finished.emit(reason)
+        try:
+            if self.play_single_file_thread is not None and self.play_single_file_thread.isRunning():
+                self.play_single_file_thread.quit()
+                self.play_single_file_thread.wait()
+        except Exception as e:
+            log.error(e)
 
     def _on_play_single_file_worker_started(self):
         log.debug("_on_play_single_file_worker_started")
@@ -125,18 +133,27 @@ class MediaEngine(QObject):
         self.play_single_file_thread = QThread()
         self.play_single_file_worker.moveToThread(self.play_single_file_thread)
         self.play_single_file_thread.started.connect(self.play_single_file_worker.run)
-        self.play_single_file_worker.gst_subtitle_render_finished.connect(self._on_render_subtitle_worker_finished)
-        self.play_single_file_worker.gst_subtitle_render_started.connect(self._on_render_subtitle_worker_started)
+        # self.play_single_file_worker.gst_subtitle_render_finished.connect(self._on_render_subtitle_worker_finished)
+        # self.play_single_file_worker.gst_subtitle_render_started.connect(self._on_render_subtitle_worker_started)
+        self.play_single_file_worker.install_gst_subtitle_render_finished(self._on_render_subtitle_worker_finished)
+        self.play_single_file_worker.install_gst_subtitle_render_started(self._on_render_subtitle_worker_started)
         self.play_single_file_worker.gst_subtitle_render_paused.connect(self._on_render_subtitle_worker_paused)
         self.play_single_file_worker.gst_subtitle_render_status.connect(self._on_render_subtitle_worker_status)
         # cleanup when thread finishes
-        self.play_single_file_worker.gst_subtitle_render_finished.connect(lambda ok, reason: self.play_single_file_thread.quit())
+        # self.play_single_file_worker.gst_subtitle_render_finished.connect(lambda ok, reason: self.play_single_file_thread.quit())
         self.play_single_file_thread.finished.connect(self.play_single_file_thread.deleteLater)
         self.play_single_file_thread.start()
 
     def _on_render_subtitle_worker_finished(self, result, reason):
         log.debug(f"_on_render_subtitle_worker_finished resson:{result}")
         self.qsignal_play_single_file_finished.emit(reason)
+        try:
+            if self.play_single_file_thread is not None and self.play_single_file_thread.isRunning():
+                self.play_single_file_thread.quit()
+                self.play_single_file_thread.wait()
+        except Exception as e:
+            log.error(e)
+
 
     def _on_render_subtitle_worker_started(self):
         log.debug("_on_render_subtitle_worker_started")
@@ -219,11 +236,24 @@ class MediaEngine(QObject):
         self.single_play(self._current_file, p.suffix)
 
     def single_play(self, file_uri: str, file_ext: str):
-        log.debug("single_play, file_uri={}".format(file_uri))
+        log.debug(f"single_play, file_uri={file_uri}, file_ext={file_ext}")
         # check play thread alive or not
         log.debug("Need to check play thread alive or not")
+        # self.stop_single_file_play()
+
         abs_path = os.path.abspath(file_uri)
         if file_ext == ".mp4":
+            gst_cmd = f"{shlex.quote(abs_path)}"
+            self._play_single_file_worker_with_cmd(gst_cmd, auto_kill_after=None)
+        elif file_ext in ['.jpg', '.jpeg', '.png', '.webp']:
+            gst_cmd = f"{shlex.quote(abs_path)}"
+            self._play_single_file_worker_with_cmd(gst_cmd, auto_kill_after=self.still_image_play_period)
+        elif file_ext == '.txt':
+            gst_cmd = f"{shlex.quote(abs_path)}"
+            self._render_subtitle_worker_with_cmd(gst_cmd, auto_kill_after=None)
+
+
+        '''if file_ext == ".mp4":
             if platform.machine() == 'x86_64':
                 pipeline = f"filesrc location={shlex.quote(abs_path)} ! decodebin ! videoconvert ! autovideosink"
             else:
@@ -239,12 +269,13 @@ class MediaEngine(QObject):
             self._play_single_file_worker_with_cmd(gst_cmd, auto_kill_after=self.still_image_play_period)
         elif file_ext == '.txt':
             gst_cmd = f"{shlex.quote(abs_path)}"
-            self._render_subtitle_worker_with_cmd(gst_cmd, auto_kill_after = None)
+            self._render_subtitle_worker_with_cmd(gst_cmd, auto_kill_after = None)'''
 
     def stop_single_file_play(self):
         log.debug("stop_play")
         if self.play_single_file_worker:
             self.play_single_file_worker.stop_if_running()
+
 
     def pause_single_file_play(self):
         log.debug("pause_single_file_play")

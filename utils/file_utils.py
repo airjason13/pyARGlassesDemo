@@ -113,10 +113,11 @@ def get_persist_config_int(persist_filename: str, def_value: int) -> int :
     path_persist_folder.mkdir(parents=True, exist_ok=True)
     target_persist_uri = Path(os.path.join(PERSIST_CONFIG_URI_PATH, persist_filename))
     if not target_persist_uri.exists():
-        target_persist_uri.touch()
-        target_persist_uri.write_text(str(def_value))
+        with open(target_persist_uri, 'w', encoding='utf-8') as f:
+            f.write(str(def_value))
 
-    str_value = target_persist_uri.read_text()
+    with open(target_persist_uri, 'r', encoding='utf-8') as f:
+        str_value = f.read().strip()
 
     return int(str_value)
 
@@ -124,29 +125,26 @@ def get_persist_config_str(persist_filename: str, def_value: str) -> str:
     path_persist_folder = Path(PERSIST_CONFIG_URI_PATH)
     path_persist_folder.mkdir(parents=True, exist_ok=True)
     target_persist_uri = Path(os.path.join(PERSIST_CONFIG_URI_PATH, persist_filename))
-    if not target_persist_uri.exists():
-        target_persist_uri.touch()
-        target_persist_uri.write_text(def_value)
+    with open(target_persist_uri, 'w', encoding='utf-8') as f:
+        f.write(str(def_value))
 
-    str_value = target_persist_uri.read_text()
-
+    with open(target_persist_uri, 'r', encoding='utf-8') as f:
+        str_value = f.read().strip()
     return str_value
 
 def set_persist_config_int(persist_filename: str, def_value: int) -> None:
     path_persist_folder = Path(PERSIST_CONFIG_URI_PATH)
     path_persist_folder.mkdir(parents=True, exist_ok=True)
     target_persist_uri = Path(os.path.join(PERSIST_CONFIG_URI_PATH, persist_filename))
-    if not target_persist_uri.exists():
-        target_persist_uri.touch()
-    target_persist_uri.write_text(str(def_value))
+    with open(target_persist_uri, 'w', encoding='utf-8') as f:
+        f.write(str(def_value))
 
 def set_persist_config_str(persist_filename: str, def_value: str) -> None:
     path_persist_folder = Path(PERSIST_CONFIG_URI_PATH)
     path_persist_folder.mkdir(parents=True, exist_ok=True)
     target_persist_uri = Path(os.path.join(PERSIST_CONFIG_URI_PATH, persist_filename))
-    if not target_persist_uri.exists():
-        target_persist_uri.touch()
-    target_persist_uri.write_text(def_value)
+    with open(target_persist_uri, 'w', encoding='utf-8') as f:
+        f.write(def_value)
 
 
 

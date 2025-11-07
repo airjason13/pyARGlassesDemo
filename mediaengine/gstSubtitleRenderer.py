@@ -58,10 +58,16 @@ class GstSubtitleWorker(QObject):
             self.lines = ["Cannot read file"]
 
     def create_pipeline(self):
-        pipeline = Gst.parse_launch(
-            "videotestsrc pattern=black ! video/x-raw, width=640, height=480, framerate=30/1, format=BGRA ! "
-            "cairooverlay name=overlay ! videoconvert ! autovideosink"
-        )
+        if platform.machine() == 'x86_64':
+            pipeline = Gst.parse_launch(
+                "videotestsrc pattern=black ! video/x-raw, width=640, height=480, framerate=30/1, format=BGRA ! "
+                "cairooverlay name=overlay ! videoconvert ! autovideosink"
+            )
+        else:
+            pipeline = Gst.parse_launch(
+                "videotestsrc pattern=black ! video/x-raw, width=640, height=480, framerate=30/1, format=BGRA ! "
+                "cairooverlay name=overlay ! videoconvert ! waylandsink"
+            )
         self.overlay = pipeline.get_by_name("overlay")
         self.overlay.connect("draw", self.draw_overlay, None)
         return pipeline
@@ -116,6 +122,7 @@ class GstSubtitleWorker(QObject):
 
         self.pipeline.set_state(Gst.State.PLAYING)
         GLib.timeout_add(33, self.on_tick)
+        self.gst_subtitle_render_status.emit(PlayStatus.PLAYING)
 
         try:
             self.loop.run()
@@ -131,13 +138,16 @@ class GstSubtitleWorker(QObject):
         if self.pipeline:
             self.pipeline.set_state(Gst.State.NULL)
         self.gst_subtitle_render_finished.emit(True, "Stoped")
+        self.gst_subtitle_render_status.emit(PlayStatus.FINISHED)
 
     def pause_if_running(self):
         self.running = False
         if self.pipeline:
             self.pipeline.set_state(Gst.State.PAUSED)
+            self.gst_subtitle_render_status.emit(PlayStatus.PAUSED)
 
     def resume_if_running(self):
         self.running = True
         if self.pipeline:
             self.pipeline.set_state(Gst.State.PLAYING)
+            self.gst_subtitle_render_status.emit(PlayStatus.PLAYING)
