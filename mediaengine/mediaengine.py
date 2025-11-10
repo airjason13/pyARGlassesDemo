@@ -476,3 +476,47 @@ class MediaEngine(QObject):
             "current_file": current_file
         }
 
+    def playlist_add_batch(self, payload: dict):
+        success = {}
+        failed = {}
+
+        playlists = payload.get("playlists", [])
+        for pl in playlists:
+            name = pl.get("name")
+            files = pl.get("files", [])
+            for f in files:
+                result = self.playlist_mgr.add_item_to_named_playlist(name, f)
+                if result.get("status") == "OK":
+                    success.setdefault(name, []).append(f)
+                else:
+                    failed.setdefault(name, []).append(f)
+                log.debug(f"[BatchAdd] {name}:{f} -> {result.get('status')}")
+
+        if failed:
+            return {"status": "NG", "error": "Add failed", "success": success, "failed": failed}
+        else:
+            return {"status": "OK", "success": success}
+
+    def playlist_remove_batch(self, payload: dict):
+        success = {}
+        failed = {}
+
+        playlists = payload.get("playlists", [])
+        for pl in playlists:
+            name = pl.get("name")
+            files = pl.get("files", [])
+            for f in files:
+                result = self.playlist_mgr.remove_item_from_named_playlist(name, f)
+                if result.get("status") == "OK":
+                    success.setdefault(name, []).append(f)
+                else:
+                    failed.setdefault(name, []).append(f)
+                log.debug(f"[BatchRemove] {name}:{f} -> {result.get('status')}")
+
+        if failed:
+            return {"status": "NG", "error": "Remove failed", "success": success, "failed": failed}
+        else:
+            return {"status": "OK", "success": success}
+
+    def playlist_expand_all(self):
+        return self.playlist_mgr.expand_all()

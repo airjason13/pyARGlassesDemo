@@ -247,131 +247,37 @@ class CmdParser(QObject):
 
     def demo_set_playlist_add_batch(self, data: dict):
         data['src'], data['dst'] = data['dst'], data['src']
-        results, failed = {}, {}
-        has_error = False
-
         try:
             payload = json.loads(data.get("data", "{}"))
-            for pl in payload.get("playlists", []):
-                name = pl.get("name")
-                items = pl.get("files", [])
-                results[name], failed[name] = [], []
-
-                for item in items:
-                    try:
-                        result = self.media_engine.playlist_mgr.add_item_to_target_playlist(name, item)
-                        if result.get("status") == "OK":
-                            results[name].append(item)
-                        else:
-                            has_error = True
-                            failed[name].append(item)
-                    except Exception as e:
-                        has_error = True
-                        failed[name].append(item)
-                        log.error(f"[AddBatch] {name}:{item} -> {e}")
-
-            if has_error:
-                reply_data = {
-                    "status": "NG",
-                    "error": "Add failed",
-                    "success": {k: v for k, v in results.items() if v},
-                    "failed": {k: v for k, v in failed.items() if v}
-                }
-                log.debug(f"[AddBatch] playlist:{name}, files:{item}, result:{result}")
-            else:
-                reply_data = {"status": "OK", "results": results}
-
-            data['data'] = json.dumps(reply_data, ensure_ascii=False)
-
+            result = self.media_engine.playlist_add_batch(payload)
+            data['data'] = json.dumps(result, ensure_ascii=False)
         except Exception as e:
             log.error(f"demo_set_playlist_add_batch error: {e}")
             data['data'] = json.dumps({"status": "NG", "error": str(e)}, ensure_ascii=False)
-
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 
     def demo_set_playlist_remove_batch(self, data: dict):
         data['src'], data['dst'] = data['dst'], data['src']
-        results, failed = {}, {}
-        has_error = False
-
         try:
             payload = json.loads(data.get("data", "{}"))
-            for pl in payload.get("playlists", []):
-                name = pl.get("name")
-                items = pl.get("files", [])
-                results[name], failed[name] = [], []
-
-                for item in items:
-                    try:
-                        result = self.media_engine.playlist_mgr.remove_item_to_target_playlist(name, item)
-                        if result.get("status") == "OK":
-                            results[name].append(item)
-                        else:
-                            has_error = True
-                            failed[name].append(item)
-                    except Exception as e:
-                        has_error = True
-                        failed[name].append(item)
-                        log.error(f"[RemoveBatch] {name}:{item} -> {e}")
-
-            if has_error:
-                reply_data = {
-                    "status": "NG",
-                    "error": "Remove failed",
-                    "success": {k: v for k, v in results.items() if v},
-                    "failed": {k: v for k, v in failed.items() if v}
-                }
-                log.debug(f"[RemoveBatch] playlist:{name}, files:{item}, result:{result}")
-            else:
-                reply_data = {"status": "OK", "results": results}
-
-            data['data'] = json.dumps(reply_data, ensure_ascii=False)
-
+            result = self.media_engine.playlist_remove_batch(payload)
+            data['data'] = json.dumps(result, ensure_ascii=False)
         except Exception as e:
             log.error(f"demo_set_playlist_remove_batch error: {e}")
             data['data'] = json.dumps({"status": "NG", "error": str(e)}, ensure_ascii=False)
-
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 
     def demo_get_playlist_expand_all(self, data: dict):
         data['src'], data['dst'] = data['dst'], data['src']
-
         try:
-            all_playlists = self.media_engine.playlist_get_all()
-            playlists_detail = []
-
-            if isinstance(all_playlists, dict):
-                playlist_names = all_playlists.get("playlists", [])
-            else:
-                playlist_names = all_playlists
-
-            if not playlist_names:
-                result = {"status": "OK", "message": "No playlists found"}
-            else:
-                for name in playlist_names:
-                    pl_info = self.media_engine.playlist_mgr.get_current_list(name)
-                    if isinstance(pl_info, dict) and pl_info.get("status") == "OK":
-                        playlists_detail.append({
-                            "name": name,
-                            "items": pl_info.get("files", [])
-                        })
-                    else:
-                        playlists_detail.append({
-                            "name": name,
-                            "items": []
-                        })
-
-                result = {"status": "OK", "playlists": playlists_detail}
-
+            result = self.media_engine.playlist_expand_all()
             data['data'] = json.dumps(result, ensure_ascii=False)
-
         except Exception as e:
             log.error(f"demo_get_playlist_expand_all error: {e}")
             data['data'] = json.dumps({"status": "NG", "error": str(e)}, ensure_ascii=False)
 
-        # Dict to Str
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 

@@ -108,7 +108,7 @@ class PlaylistManager:
         except Exception as e:
             return {"status": "NG", "error": str(e)}
 
-    def add_item_to_target_playlist(self, playlist_name: str, filename: str):
+    def add_item_to_named_playlist(self, playlist_name: str, filename: str):
         if not playlist_name or not playlist_name.strip():
             return {"status": "NG", "error": "Invalid playlist name"}
         if not filename or not filename.strip():
@@ -136,7 +136,7 @@ class PlaylistManager:
         except Exception as e:
             return {"status": "NG", "error": str(e)}
 
-    def remove_item_to_target_playlist(self, playlist_name: str, filename: str):
+    def remove_item_from_named_playlist(self, playlist_name: str, filename: str):
         if not playlist_name or not playlist_name.strip():
             return {"status": "NG", "error": "Invalid playlist name"}
         if not filename or not filename.strip():
@@ -156,5 +156,36 @@ class PlaylistManager:
             files.remove(filename)
             self._save(playlist_name, data)
             return {"status": "OK", "playlist": playlist_name, "removed": filename}
+        except Exception as e:
+            return {"status": "NG", "error": str(e)}
+
+    def expand_all(self):
+        try:
+            all_playlists = self.get_all()
+
+            if isinstance(all_playlists, dict):
+                playlist_names = all_playlists.get("playlists", [])
+            else:
+                playlist_names = all_playlists
+
+            if not playlist_names:
+                return {"status": "OK", "message": "No playlists found", "playlists": []}
+
+            playlists_detail = []
+            for name in playlist_names:
+                pl_info = self.get_current_list(name)
+                if isinstance(pl_info, dict) and pl_info.get("status") == "OK":
+                    playlists_detail.append({
+                        "name": name,
+                        "files": pl_info.get("files", [])
+                    })
+                else:
+                    playlists_detail.append({
+                        "name": name,
+                        "files": []
+                    })
+
+            return {"status": "OK", "playlists": playlists_detail}
+
         except Exception as e:
             return {"status": "NG", "error": str(e)}

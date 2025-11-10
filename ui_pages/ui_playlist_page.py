@@ -13,6 +13,7 @@ class PlaylistPage(QWidget):
 
     def __init__(self, _main_window, _central_qwidget, **kwargs):
         super(PlaylistPage, self).__init__(**kwargs)
+        self.batch_inputs = None
         self.btn_expand_all_playlists = None
         self.btn_remove_batch_items = None
         self.btn_add_batch_items = None
@@ -128,9 +129,39 @@ class PlaylistPage(QWidget):
         section4.setStyleSheet("color: lightgreen; font-weight: bold; font-size: 16px;")
         layout.addWidget(section4)
 
-        self.btn_add_batch_items = QPushButton("➕ Add Batch Items\n批次清單新增")
-        self.btn_remove_batch_items = QPushButton("❌ Remove Batch Items\n批次清單移除")
-        self.btn_expand_all_playlists = QPushButton("📂 Expand All Playlists\n展開全部清單")
+        from PyQt5.QtWidgets import QGridLayout
+        grid_layout = QGridLayout()
+        grid_layout.setSpacing(10)
+
+        # Label
+        header_playlist = QLabel("🎵 Playlist Name")
+        header_playlist.setStyleSheet("color: orange; font-weight: bold;")
+        header_items = QLabel("🎬 Playlist Items (comma separated)")
+        header_items.setStyleSheet("color: lightblue; font-weight: bold;")
+        grid_layout.addWidget(header_playlist, 0, 0)
+        grid_layout.addWidget(header_items, 0, 1)
+
+        # Edit Line
+        self.batch_inputs = []
+        for i in range(3):
+            playlist_edit = QLineEdit()
+            playlist_edit.setPlaceholderText(f"Playlist {i + 1}")
+            playlist_edit.setStyleSheet("background-color:#222; color:white; font-size:13px; padding:4px;")
+
+            items_edit = QLineEdit()
+            items_edit.setPlaceholderText(f"e.g. /Media/song1.mp4, /Media/song2.mp4")
+            items_edit.setStyleSheet("background-color:#222; color:white; font-size:13px; padding:4px;")
+
+            grid_layout.addWidget(playlist_edit, i + 1, 0)
+            grid_layout.addWidget(items_edit, i + 1, 1)
+            self.batch_inputs.append((playlist_edit, items_edit))
+
+        layout.addLayout(grid_layout)
+
+        # Batch command buttons
+        self.btn_add_batch_items = QPushButton("➕ Add Batch Items 批次清單新增")
+        self.btn_remove_batch_items = QPushButton("❌ Remove Batch Items 批次清單移除")
+        self.btn_expand_all_playlists = QPushButton("📂 Expand All Playlists 展開全部清單")
 
         layout.addLayout(make_row(
             self.btn_add_batch_items,
@@ -251,16 +282,22 @@ class PlaylistPage(QWidget):
 
     # --- Section 4: Test Batch-Playlist Commands ---
     def on_add_batch_items(self):
+        playlists = []
+        for name_edit, items_edit in self.batch_inputs:
+            name = name_edit.text().strip()
+            items = [x.strip() for x in items_edit.text().split(",") if x.strip()]
+            if name and items:
+                playlists.append({"name": name, "files": items})
+
+        if not playlists:
+            self.output_result({"status": "NG", "error": "Please enter playlist names and items"})
+            return
+
         parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
         test_data = {
             "src": "mobile",
             "dst": "demo",
-            "data": json.dumps({
-                "playlists": [
-                    {"name": "rock", "files": ["song1.mp4", "song2.mp4"]},
-                    {"name": "jazz", "files": ["jazz1.mp4"]}
-                ]
-            }, ensure_ascii=False)
+            "data": json.dumps({"playlists": playlists}, ensure_ascii=False)
         }
         parser.unix_data_ready_to_send.connect(
             lambda msg: self.text_output.setPlainText(msg)
@@ -268,16 +305,22 @@ class PlaylistPage(QWidget):
         parser.demo_set_playlist_add_batch(test_data)
 
     def on_remove_batch_items(self):
+        playlists = []
+        for name_edit, items_edit in self.batch_inputs:
+            name = name_edit.text().strip()
+            items = [x.strip() for x in items_edit.text().split(",") if x.strip()]
+            if name and items:
+                playlists.append({"name": name, "files": items})
+
+        if not playlists:
+            self.output_result({"status": "NG", "error": "Please enter playlist names and items"})
+            return
+
         parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
         test_data = {
             "src": "mobile",
             "dst": "demo",
-            "data": json.dumps({
-                "playlists": [
-                    {"name": "rock", "files": ["song1.mp4", "song2.mp4"]},
-                    {"name": "jazz", "files": ["jazz1.mp4"]}
-                ]
-            }, ensure_ascii=False)
+            "data": json.dumps({"playlists": playlists}, ensure_ascii=False)
         }
         parser.unix_data_ready_to_send.connect(
             lambda msg: self.text_output.setPlainText(msg)
