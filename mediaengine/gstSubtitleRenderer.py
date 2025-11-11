@@ -18,6 +18,11 @@ class GstSubtitleWorker(QObject):
     gst_subtitle_render_paused = pyqtSignal()
     gst_subtitle_render_status = pyqtSignal(int)
 
+    # CC: Class variable
+    color_r = 255
+    color_g = 255
+    color_b = 255
+
     def __init__(self, cmd_args, auto_kill_after=None):
         """
         cmd_args: list of command + args (for subprocess.Popen)
@@ -69,7 +74,7 @@ class GstSubtitleWorker(QObject):
     def draw_overlay(self, overlay, context, timestamp, duration, user_data):
         context.select_font_face("Noto Sans TC", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
         context.set_font_size(40)
-        context.set_source_rgba(1, 1, 1, 1.0)
+        context.set_source_rgba(self.color_r / 255, self.color_g / 255, self.color_b / 255, 1.0)
 
         for i, line in enumerate(self.lines):
             y = self.scroll_y + i * self.line_height
@@ -129,7 +134,11 @@ class GstSubtitleWorker(QObject):
         if self.loop and self.loop.is_running():
             self.loop.quit()
         if self.pipeline:
+            log.debug("cleanning pipeline")
             self.pipeline.set_state(Gst.State.NULL)
+            self.pipeline.get_bus().remove_signal_watch()
+            self.pipeline.get_bus().disable_sync_message_emission()
+            self.pipeline = None
         self.gst_subtitle_render_finished.emit(True, "Stoped")
 
     def pause_if_running(self):
@@ -141,3 +150,9 @@ class GstSubtitleWorker(QObject):
         self.running = True
         if self.pipeline:
             self.pipeline.set_state(Gst.State.PLAYING)
+
+    @classmethod
+    def set_color(cls, r, g, b):
+        cls.color_r = r
+        cls.color_g = g
+        cls.color_b = b

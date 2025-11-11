@@ -181,6 +181,9 @@ class MediaEngine(QObject):
 
         self.single_play(self._current_file, p.suffix)
 
+    def subtitle_color_set(self, r:int, g:int, b:int):
+        GstSubtitleWorker.set_color(r, g, b)
+
     def single_play(self, file_uri: str, file_ext: str):
         log.debug("single_play, file_uri={}".format(file_uri))
         # check play thread alive or not
