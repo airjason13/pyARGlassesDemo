@@ -63,11 +63,15 @@ class CMainWindow(QMainWindow):
         # self.timer.timeout.connect(self._periodic_unix_msg)
         # self.timer.start()
 
-    def send_to_msg_server(self, send_data:str):
-        # log.debug("send_data:%s", send_data)
+    def send_to_msg_server(self, send_data: str):
+        log.debug("send_data:%s", send_data)
+        # self.msg_app_unix_client.send(send_data)
         self._periodic_unix_msg(send_data)
 
-    # def _periodic_unix_msg(self, data: bytes):
+    '''def direct_send_to_msg_server(self, send_data: str):
+        log.debug("send_data:%s", send_data)
+        asyncio.create_task(self.test_send_unix_msg(send_data))'''
+
     def _periodic_unix_msg(self, data:str):
         """
         QTimer 觸發時呼叫，安排 coroutine 到 asyncio 事件迴圈
