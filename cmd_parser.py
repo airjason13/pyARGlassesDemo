@@ -137,6 +137,32 @@ class CmdParser(QObject):
         data['src'], data['dst'] = data['dst'], data['src']
         log.debug("data : %s", data)
 
+    def demo_set_mediaengine_subtitle_color(self, data:dict):
+        if data['data'] == 'no_data':
+            return
+        settings = data['data'].lower()
+
+        result = dict(item.split('=') for item in settings.split(',') if '=' in item)
+
+        r = result.get('r', None)
+        g = result.get('g', None)
+        b = result.get('b', None)
+
+        if r != None and g != None and b != None:
+            self.media_engine.subtitle_color_set(int(r), int(g), int(b))
+
+    def demo_set_mediaengine_subtitle_repeat(self, data:dict):
+        if data['data'] == 'no_data':
+            return
+        times = data['data'].lower()
+        self.media_engine.subtitle_repeat_set(times)
+
+    def demo_set_mediaengine_subtitle_color_lines(self, data:dict):
+        if data['data'] == 'no_data':
+            return
+        enable = data['data'].lower()
+        self.media_engine.subtitle_color_lines_set(enable)
+
     # =========================
     # === Playlist Commands ===
     # =========================
@@ -263,6 +289,9 @@ class CmdParser(QObject):
         DEMO_SET_MEDIAENGINE_RESUME_PLAYING: demo_set_mediaengine_resume_playing,
 
         DEMO_SET_MEDIAENGINE_RENDER_SUBTITLE: demo_set_mediaengine_render_subtitle,
+        DEMO_SET_MEDIAENGINE_SUBTITLE_COLOR: demo_set_mediaengine_subtitle_color,
+        DEMO_SET_MEDIAENGINE_SUBTITLE_REPEAT: demo_set_mediaengine_subtitle_repeat,
+        DEMO_SET_MEDIAENGINE_SUBTITLE_COLOR_LINES: demo_set_mediaengine_subtitle_color_lines,
 
         DEMO_SET_PLAYLIST_CREATE: demo_set_playlist_create,
         DEMO_SET_PLAYLIST_SELECT: demo_set_playlist_select,
