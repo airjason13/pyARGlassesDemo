@@ -13,9 +13,11 @@ class PlaylistPage(QWidget):
 
     def __init__(self, _main_window, _central_qwidget, **kwargs):
         super(PlaylistPage, self).__init__(**kwargs)
+
         self.batch_inputs = None
         self.btn_expand_all_playlists = None
-        self.btn_remove_batch_items = None
+        self.btn_remove_batch_items_by_name = None
+        self.btn_remove_batch_items_by_index = None
         self.btn_add_batch_items = None
         self.test_sock_cmd = False
         self.btn_get_item = None
@@ -136,36 +138,46 @@ class PlaylistPage(QWidget):
         # Label
         header_playlist = QLabel("🎵 Playlist Name")
         header_playlist.setStyleSheet("color: orange; font-weight: bold;")
-        header_items = QLabel("🎬 Playlist Items (comma separated)")
+        header_items = QLabel("🎬 Playlist Items")
         header_items.setStyleSheet("color: lightblue; font-weight: bold;")
+        header_index = QLabel("🔢 Indexes")
+        header_index.setStyleSheet("color: lightcyan; font-weight: bold;")
+
         grid_layout.addWidget(header_playlist, 0, 0)
         grid_layout.addWidget(header_items, 0, 1)
+        grid_layout.addWidget(header_index, 0, 2)
 
         # Edit Line
         self.batch_inputs = []
         for i in range(3):
             playlist_edit = QLineEdit()
-            playlist_edit.setPlaceholderText(f"Playlist {i + 1}")
-            playlist_edit.setStyleSheet("background-color:#222; color:white; font-size:13px; padding:4px;")
-
             items_edit = QLineEdit()
-            items_edit.setPlaceholderText(f"e.g. /Media/song1.mp4, /Media/song2.mp4")
-            items_edit.setStyleSheet("background-color:#222; color:white; font-size:13px; padding:4px;")
+            index_edit = QLineEdit()
+
+            playlist_edit.setPlaceholderText(f"Playlist {i + 1}")
+            items_edit.setPlaceholderText("e.g /Media/song1.mp4, ....mp4")
+            index_edit.setPlaceholderText("e.g 0, 2, 5")
+
+            index_edit.setStyleSheet("background-color:#222; color:white; font-size:13px; padding:4px;")
 
             grid_layout.addWidget(playlist_edit, i + 1, 0)
             grid_layout.addWidget(items_edit, i + 1, 1)
-            self.batch_inputs.append((playlist_edit, items_edit))
+            grid_layout.addWidget(index_edit, i + 1, 2)
+
+            self.batch_inputs.append((playlist_edit, items_edit, index_edit))
 
         layout.addLayout(grid_layout)
 
         # Batch command buttons
-        self.btn_add_batch_items = QPushButton("➕ Add Batch Items 批次清單新增")
-        self.btn_remove_batch_items = QPushButton("❌ Remove Batch Items 批次清單移除")
-        self.btn_expand_all_playlists = QPushButton("📂 Expand All Playlists 展開全部清單")
+        self.btn_add_batch_items = QPushButton("➕ Add Batch Items\n批次清單加入影片")
+        self.btn_remove_batch_items_by_name = QPushButton("❌ Batch Remove Matching Items\n批次刪除（依名稱）")
+        self.btn_remove_batch_items_by_index = QPushButton("❌ Batch Remove by Index\n批次刪除（依索引）")
+        self.btn_expand_all_playlists = QPushButton("📂 Expand All Playlists\n展開全部清單")
 
         layout.addLayout(make_row(
             self.btn_add_batch_items,
-            self.btn_remove_batch_items,
+            self.btn_remove_batch_items_by_name,
+            self.btn_remove_batch_items_by_index,
             self.btn_expand_all_playlists
         ))
 
@@ -196,8 +208,10 @@ class PlaylistPage(QWidget):
         self.btn_prev.clicked.connect(self.on_prev)
         self.btn_get_item.clicked.connect(self.on_get_item)
         self.btn_add_batch_items.clicked.connect(self.on_add_batch_items)
-        self.btn_remove_batch_items.clicked.connect(self.on_remove_batch_items)
+        self.btn_remove_batch_items_by_name.clicked.connect(self.on_remove_batch_items_by_name)
+        self.btn_remove_batch_items_by_index.clicked.connect(self.on_remove_batch_items_by_index)
         self.btn_expand_all_playlists.clicked.connect(self.on_get_playlist_expand_all)
+
 
         # --- Final layout setup ---
         layout.addSpacing(10)
@@ -283,7 +297,7 @@ class PlaylistPage(QWidget):
     # --- Section 4: Test Batch-Playlist Commands ---
     def on_add_batch_items(self):
         playlists = []
-        for name_edit, items_edit in self.batch_inputs:
+        for name_edit, items_edit,index_edit in self.batch_inputs:
             name = name_edit.text().strip()
             items = [x.strip() for x in items_edit.text().split(",") if x.strip()]
             if name and items:
@@ -302,11 +316,11 @@ class PlaylistPage(QWidget):
         parser.unix_data_ready_to_send.connect(
             lambda msg: self.text_output.setPlainText(msg)
         )
-        parser.demo_set_playlist_add_batch(test_data)
+        parser.demo_set_playlist_batch_add(test_data)
 
-    def on_remove_batch_items(self):
+    def on_remove_batch_items_by_name(self):
         playlists = []
-        for name_edit, items_edit in self.batch_inputs:
+        for name_edit, items_edit, index_edit in self.batch_inputs:
             name = name_edit.text().strip()
             items = [x.strip() for x in items_edit.text().split(",") if x.strip()]
             if name and items:
@@ -325,7 +339,35 @@ class PlaylistPage(QWidget):
         parser.unix_data_ready_to_send.connect(
             lambda msg: self.text_output.setPlainText(msg)
         )
-        parser.demo_set_playlist_remove_batch(test_data)
+        parser.demo_set_playlist_batch_remove_by_name(test_data)
+
+    def on_remove_batch_items_by_index(self):
+        playlists = []
+
+        for name_edit, items_edit, index_edit in self.batch_inputs:
+            name = name_edit.text().strip()
+
+            indexes = []
+            if index_edit.text().strip():
+                indexes = [int(x.strip()) for x in index_edit.text().split(",") if x.strip().isdigit()]
+
+            if name and indexes:
+                playlists.append({"name": name, "index": indexes})
+
+        if not playlists:
+            self.output_result({"status": "NG", "error": "Please enter playlist names and indexes"})
+            return
+
+        parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
+        test_data = {
+            "src": "mobile",
+            "dst": "demo",
+            "data": json.dumps({"playlists": playlists}, ensure_ascii=False)
+        }
+        parser.unix_data_ready_to_send.connect(
+            lambda msg: self.text_output.setPlainText(msg)
+        )
+        parser.demo_set_playlist_batch_remove_by_index(test_data)
 
     def on_get_playlist_expand_all(self):
         parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)

@@ -306,7 +306,7 @@ class MediaEngine(QObject):
 
         self._current_playlist = self.playlist_mgr.current_list
 
-        files_buffer = self.playlist_mgr.get_files_in_current_list().get("files", [])
+        files_buffer = self.playlist_mgr._get_files_in_current_list().get("files", [])
         if not files_buffer:
             return {"status": "NG", "error": f"Playlist '{self.playlist_mgr.current_list}' is empty"}
 
@@ -476,7 +476,7 @@ class MediaEngine(QObject):
             "current_file": current_file
         }
 
-    def playlist_add_batch(self, payload: dict):
+    def playlist_batch_add(self, payload: dict):
         success = {}
         failed = {}
 
@@ -485,7 +485,7 @@ class MediaEngine(QObject):
             name = pl.get("name")
             files = pl.get("files", [])
             for f in files:
-                result = self.playlist_mgr.add_item_to_named_playlist(name, f)
+                result = self.playlist_mgr.add_item_from_playlist(name, f)
                 if result.get("status") == "OK":
                     success.setdefault(name, []).append(f)
                 else:
@@ -497,7 +497,7 @@ class MediaEngine(QObject):
         else:
             return {"status": "OK", "success": success}
 
-    def playlist_remove_batch(self, payload: dict):
+    def playlist_remove_items_by_name_batch(self, payload: dict):
         success = {}
         failed = {}
 
@@ -506,7 +506,7 @@ class MediaEngine(QObject):
             name = pl.get("name")
             files = pl.get("files", [])
             for f in files:
-                result = self.playlist_mgr.remove_item_from_named_playlist(name, f)
+                result = self.playlist_mgr.remove_item_from_playlist(name, f)
                 if result.get("status") == "OK":
                     success.setdefault(name, []).append(f)
                 else:
@@ -518,5 +518,47 @@ class MediaEngine(QObject):
         else:
             return {"status": "OK", "success": success}
 
+    def playlist_remove_items_by_index_batch(self, payload: dict):
+        success = {}
+        failed = {}
+
+        playlists = payload.get("playlists", [])
+        for pl in playlists:
+            name = pl.get("name")
+            index_list = pl.get("index", [])
+
+            if not name or not isinstance(index_list, list):
+                failed.setdefault(name or "unknown", []).append(
+                    {"error": "Invalid playlist or index_list"}
+                )
+                continue
+
+            for idx in sorted(index_list, reverse=True):
+
+                result = self.playlist_mgr.remove_item_from_playlist_by_index(name, idx)
+
+                if result.get("status") == "OK":
+                    removed_obj = result.get("removed", {})
+                    success.setdefault(name, []).append(removed_obj)
+                else:
+                    failed.setdefault(name, []).append(
+                        {"index": idx, "error": result.get("error")}
+                    )
+        if failed:
+            return {
+                "status": "NG",
+                "error": "Remove failed",
+                "success": success,
+                "failed": failed
+            }
+
+        return {
+            "status": "OK",
+            "success": success
+        }
+
     def playlist_expand_all(self):
         return self.playlist_mgr.expand_all()
+
+
+

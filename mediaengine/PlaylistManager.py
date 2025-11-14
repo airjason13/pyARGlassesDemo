@@ -71,7 +71,9 @@ class PlaylistManager:
         if not os.path.exists(p):
             return {"status": "NG", "error": f"Playlist '{name}' not found"}
         data = self._load(name)
-        return {"status": "OK", "playlist": name, "files": data.get("files", [])}
+        files = data.get("files", [])
+        indexed_files = [{"index": i, "fpath": f} for i, f in enumerate(files)]
+        return {"status": "OK", "playlist": name, "files": indexed_files}
 
     def remove_item(self, filename: str):
         if not self.current_list:
@@ -85,11 +87,15 @@ class PlaylistManager:
         self._save(self.current_list, data)
         return {"status": "OK", "removed": filename, "list": self.current_list}
 
-    def get_files_in_current_list(self):
+    def _get_files_in_current_list(self):
         if not self.current_list:
             return {"status": "NG", "error": "No playlist selected"}
         data = self._load(self.current_list)
         return {"status": "OK", "playlist": self.current_list, "files": data.get("files", [])}
+
+        # files = data.get("files", [])
+        # indexed_files = [{"index": i, "filename": f} for i, f in enumerate(files)]
+        # return {"status": "OK", "playlist": self.current_list, "files": indexed_files}
 
     def remove_playlist(self, name: str):
         if not name:
@@ -108,7 +114,7 @@ class PlaylistManager:
         except Exception as e:
             return {"status": "NG", "error": str(e)}
 
-    def add_item_to_named_playlist(self, playlist_name: str, filename: str):
+    def add_item_from_playlist(self, playlist_name: str, filename: str):
         if not playlist_name or not playlist_name.strip():
             return {"status": "NG", "error": "Invalid playlist name"}
         if not filename or not filename.strip():
@@ -136,7 +142,7 @@ class PlaylistManager:
         except Exception as e:
             return {"status": "NG", "error": str(e)}
 
-    def remove_item_from_named_playlist(self, playlist_name: str, filename: str):
+    def remove_item_from_playlist(self, playlist_name: str, filename: str):
         if not playlist_name or not playlist_name.strip():
             return {"status": "NG", "error": "Invalid playlist name"}
         if not filename or not filename.strip():
@@ -156,6 +162,36 @@ class PlaylistManager:
             files.remove(filename)
             self._save(playlist_name, data)
             return {"status": "OK", "playlist": playlist_name, "removed": filename}
+        except Exception as e:
+            return {"status": "NG", "error": str(e)}
+
+    def remove_item_from_playlist_by_index(self, playlist_name: str, index: int):
+        if not playlist_name or not playlist_name.strip():
+            return {"status": "NG", "error": "Invalid playlist name"}
+
+        p = self._path(playlist_name)
+        if not os.path.exists(p):
+            return {"status": "NG", "error": f"Playlist '{playlist_name}' not found"}
+
+        try:
+            data = self._load(playlist_name)
+            files = data.get("files", [])
+
+            if index < 0 or index >= len(files):
+                return {"status": "NG", "error": f"Index {index} out of range"}
+
+            fpath = files.pop(index)
+            self._save(playlist_name, data)
+
+            return {
+                "status": "OK",
+                "playlist": playlist_name,
+                "removed": {
+                    "index": index,
+                    "fpath": fpath
+                }
+            }
+
         except Exception as e:
             return {"status": "NG", "error": str(e)}
 

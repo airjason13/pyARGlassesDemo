@@ -245,27 +245,41 @@ class CmdParser(QObject):
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 
-    def demo_set_playlist_add_batch(self, data: dict):
+    def demo_set_playlist_batch_add(self, data: dict):
         data['src'], data['dst'] = data['dst'], data['src']
         try:
             payload = json.loads(data.get("data", "{}"))
-            result = self.media_engine.playlist_add_batch(payload)
+            result = self.media_engine.playlist_batch_add(payload)
             data['data'] = json.dumps(result, ensure_ascii=False)
         except Exception as e:
-            log.error(f"demo_set_playlist_add_batch error: {e}")
+            log.error(f"demo_set_playlist_batch_add error: {e}")
             data['data'] = json.dumps({"status": "NG", "error": str(e)}, ensure_ascii=False)
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 
-    def demo_set_playlist_remove_batch(self, data: dict):
+    def demo_set_playlist_batch_remove_by_name(self, data: dict):
         data['src'], data['dst'] = data['dst'], data['src']
         try:
             payload = json.loads(data.get("data", "{}"))
-            result = self.media_engine.playlist_remove_batch(payload)
+            # Extract batch remove payload: {"playlists":[{"name":...,"files":[...]},...]}
+            result = self.media_engine.playlist_remove_items_by_name_batch(payload)
             data['data'] = json.dumps(result, ensure_ascii=False)
         except Exception as e:
-            log.error(f"demo_set_playlist_remove_batch error: {e}")
+            log.error(f"demo_set_playlist_batch_remove_by_name error: {e}")
             data['data'] = json.dumps({"status": "NG", "error": str(e)}, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_set_playlist_batch_remove_by_index(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        try:
+            payload = json.loads(data.get("data", "{}"))
+            result = self.media_engine.playlist_remove_items_by_index_batch(payload)
+            data['data'] = json.dumps(result, ensure_ascii=False)
+        except Exception as e:
+            log.error(f"demo_set_playlist_batch_remove_by_index error: {e}")
+            data['data'] = json.dumps({"status": "NG", "error": str(e)}, ensure_ascii=False)
+
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 
@@ -312,8 +326,9 @@ class CmdParser(QObject):
         DEMO_SET_PLAYLIST_NEXT_ITEM: demo_set_playlist_next,
         DEMO_SET_PLAYLIST_PREV_ITEM: demo_set_playlist_prev,
         DEMO_GET_PLAYLIST_GET_ITEM: demo_get_playlist_get_item,
-        DEMO_SET_PLAYLIST_ADD_BATCH: demo_set_playlist_add_batch,
-        DEMO_SET_PLAYLIST_REMOVE_BATCH: demo_set_playlist_remove_batch,
+        DEMO_SET_PLAYLIST_BATCH_ADD: demo_set_playlist_batch_add,
+        DEMO_SET_PLAYLIST_BATCH_REMOVE_BY_NAME: demo_set_playlist_batch_remove_by_name,
+        DEMO_SET_PLAYLIST_BATCH_REMOVE_BY_INDEX: demo_set_playlist_batch_remove_by_index,
         DEMO_GET_PLAYLIST_EXPAND_ALL: demo_get_playlist_expand_all,
 
         DEMO_SET_TEST: demo_set_test,
