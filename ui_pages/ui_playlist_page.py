@@ -14,6 +14,7 @@ class PlaylistPage(QWidget):
     def __init__(self, _main_window, _central_qwidget, **kwargs):
         super(PlaylistPage, self).__init__(**kwargs)
 
+        self.input_index = None
         self.batch_inputs = None
         self.btn_expand_all_playlists = None
         self.btn_remove_batch_items_by_name = None
@@ -55,11 +56,21 @@ class PlaylistPage(QWidget):
         layout.addWidget(title)
 
         # --- Input Area ---
-        self.input_name = QLineEdit()
-        self.input_name.setPlaceholderText("Playlist name or file name")
-        self.input_name.setStyleSheet("font-size: 14px; padding: 6px;")
-        layout.addWidget(self.input_name)
+        input_row = QHBoxLayout()
 
+        self.input_name = QLineEdit()
+        self.input_name.setPlaceholderText("[ Playlist name / File path ]")
+        self.input_name.setStyleSheet("font-size: 14px; padding: 6px;")
+
+        self.input_index = QLineEdit()
+        self.input_index.setPlaceholderText("[ Index (play) ]")
+        # self.input_index.setFixedWidth(70)
+        self.input_index.setStyleSheet("font-size: 14px; padding: 6px;")
+
+        input_row.addWidget(self.input_name)
+        input_row.addWidget(self.input_index)
+
+        layout.addLayout(input_row)
         # --- Helper function to create uniform rows ---
         def make_row(*buttons):
             row = QHBoxLayout()
@@ -270,8 +281,32 @@ class PlaylistPage(QWidget):
         self.output_result(result)
 
     def on_play(self):
-         result = self.media_engine.playlist_play()
-         self.output_result(result)
+        playlist_name = self.input_name.text().strip()
+        idx_str = self.input_index.text().strip()
+
+        # convert index
+        try:
+            index = int(idx_str) if idx_str else 0
+        except:
+            index = 0
+
+        payload = {
+            "name": playlist_name or None,
+            "index": index,
+        }
+
+        parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
+
+        test_data = {
+            "src": "mobile",
+            "dst": "demo",
+            "data": json.dumps(payload, ensure_ascii=False),
+        }
+
+        parser.unix_data_ready_to_send.connect(
+            lambda msg: self.text_output.setPlainText(msg)
+        )
+        parser.demo_set_playlist_play(test_data)
 
     def on_stop(self):
         result = self.media_engine.playlist_stop()

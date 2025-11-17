@@ -560,5 +560,84 @@ class MediaEngine(QObject):
     def playlist_expand_all(self):
         return self.playlist_mgr.expand_all()
 
+    def playlist_play_at(self, name: str | None = None, index: int = 0) -> dict:
+        # Stop playing safely first
+        try:
+            if self.play_single_file_worker:
+                self.play_single_file_worker.stop_if_running()
+        except:
+            pass
+        try:
+            if self.play_single_file_thread and self.play_single_file_thread.isRunning():
+                self.play_single_file_thread.quit()
+                self.play_single_file_thread.wait()
+        except:
+            pass
+
+        self.play_single_file_thread = None
+        self.play_single_file_worker = None
+
+        # Determine playlist name
+        if not name:
+            name = self.playlist_mgr.current_list
+
+        # Select playlist if needed
+        if name != self.playlist_mgr.current_list:
+            result = self.playlist_mgr.select(name)
+            if result.get("status") != "OK":
+                return result
+            self._current_playlist = self.playlist_mgr.current_list
+        else:
+            self._current_playlist = name
+
+        # Load playlist items
+        data = self.playlist_mgr._get_files_in_current_list()
+        files = data.get("files", [])
+        if not files:
+            return {"status": "NG", "error": f"Playlist '{name}' is empty"}
+
+        # Validate index
+        if index < 0 or index >= len(files):
+            return {"status": "NG", "error": f"Index {index} out of range"}
+
+        # Prepare playback list
+        self._playlist_files = files
+        self._playlist_index = index
+
+        # Reset thread (same as playlist_play)
+        try:
+            if self.play_single_file_thread and self.play_single_file_thread.isRunning():
+                if self.play_single_file_worker:
+                    self.play_single_file_worker.stop_if_running()
+                self.play_single_file_thread.quit()
+                self.play_single_file_thread.wait(500)
+        except RuntimeError:
+            log.warning("[Playlist] play_single_file_thread was already deleted, resetting.")
+        except Exception as e:
+            log.warning(f"[Playlist] Error while resetting thread: {e}")
+
+        self.play_single_file_thread = None
+        self.play_single_file_worker = None
+
+        # Ensure auto-next installed
+        try:
+            self.qsignal_play_single_file_finished.disconnect(self._handle_playlist_auto_next)
+        except Exception:
+            pass
+        self.qsignal_play_single_file_finished.connect(self._handle_playlist_auto_next)
+
+        # Start playing from selected index
+        log.info(f"[Playlist] Start playing list '{self._current_playlist}' at index {index}, total={len(files)}")
+        self._playlist_play_item()
+
+        return {
+            "status": "OK",
+            "playlist": name,
+            "start_index": index,
+            "count": len(files),
+            "fpath": files[index]
+        }
+
+
 
 

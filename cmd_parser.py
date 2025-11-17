@@ -190,11 +190,15 @@ class CmdParser(QObject):
 
     def demo_set_playlist_play(self, data: dict):
         data['src'], data['dst'] = data['dst'], data['src']
-        if data.get('data') == 'True':
-            result = self.media_engine.playlist_play()
-        else :
-            result = {"status": "NG", "error": "playing playlist"}
+        payload = json.loads(data.get("data", "{}"))
+        name = payload.get("name",None)
+        raw_index = payload.get("index", 0)
+        try:
+            index = int(raw_index)
+        except (TypeError, ValueError):
+            index = 0
 
+        result = self.media_engine.playlist_play_at(name=name, index=index)
         data['data'] = json.dumps(result, ensure_ascii=False)
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
