@@ -110,39 +110,23 @@ class MediaEngine(QObject):
 
     def _render_subtitle_worker_with_cmd(self, cmd_args, auto_kill_after=None):
         if self.media_engine_status == PlayStatus.FINISHED or self.media_engine_status == PlayStatus.IDLE:
-            self.play_single_file_worker = None
-            self.play_single_file_thread = None
+            self.gst_player = None
         # If previous running, ask to stop first
-        if self.play_single_file_thread is not None and self.play_single_file_thread.isRunning():
+        if self.gst_player is not None and self.gst_player.is_running():
             log.debug("Playing, Please Stop First")
             return
 
-        # Create worker + thread
-        self.play_single_file_worker = GstSubtitleWorker(cmd_args, auto_kill_after = auto_kill_after)
-        self.play_single_file_thread = QThread()
-        self.play_single_file_worker.moveToThread(self.play_single_file_thread)
-        self.play_single_file_thread.started.connect(self.play_single_file_worker.run)
-        # self.play_single_file_worker.gst_subtitle_render_finished.connect(self._on_render_subtitle_worker_finished)
-        # self.play_single_file_worker.gst_subtitle_render_started.connect(self._on_render_subtitle_worker_started)
-        self.play_single_file_worker.install_gst_subtitle_render_finished(self._on_render_subtitle_worker_finished)
-        self.play_single_file_worker.install_gst_subtitle_render_started(self._on_render_subtitle_worker_started)
-        self.play_single_file_worker.gst_subtitle_render_paused.connect(self._on_render_subtitle_worker_paused)
-        self.play_single_file_worker.gst_subtitle_render_status.connect(self._on_render_subtitle_worker_status)
-        # cleanup when thread finishes
-        # self.play_single_file_worker.gst_subtitle_render_finished.connect(lambda ok, reason: self.play_single_file_thread.quit())
-        self.play_single_file_thread.finished.connect(self.play_single_file_thread.deleteLater)
-        self.play_single_file_thread.start()
+        # Create worker
+        self.gst_player = GstSubtitleWorker(cmd_args, auto_kill_after = auto_kill_after)
+        self.gst_player.install_gst_subtitle_render_finished(self._on_render_subtitle_worker_finished)
+        self.gst_player.install_gst_subtitle_render_started(self._on_render_subtitle_worker_started)
+        self.gst_player.install_gst_subtitle_render_paused(self._on_render_subtitle_worker_paused)
+        self.gst_player.install_gst_subtitle_render_status(self._on_render_subtitle_worker_status)
+        self.gst_player.run()
 
     def _on_render_subtitle_worker_finished(self, result, reason):
         log.debug(f"_on_render_subtitle_worker_finished resson:{result}")
         self.qsignal_play_single_file_finished.emit(reason)
-        try:
-            if self.play_single_file_thread is not None and self.play_single_file_thread.isRunning():
-                self.play_single_file_thread.quit()
-                self.play_single_file_thread.wait()
-        except Exception as e:
-            log.error(e)
-
 
     def _on_render_subtitle_worker_started(self):
         log.debug("_on_render_subtitle_worker_started")
@@ -213,6 +197,33 @@ class MediaEngine(QObject):
             log.debug(f"single_play_from_cmd error, no such file:{self._current_file}")
 
         self.single_play(self._current_file, p.suffix)
+
+    def subtitle_color_set(self, r:int, g:int, b:int):
+        GstSubtitleWorker.set_color(r, g, b)
+
+    def subtitle_repeat_set(self, times:str):
+        try:
+            values = int(times)
+        except Exception as e:
+            log.debug(f"Convert to int failed: {e}")
+            self.qsignal_mediaengine_error_report.emit(f"Subtitle repeat set invalid: {times}")
+            return
+
+        if values != 0 and values != 1 and values != -1:
+            self.qsignal_mediaengine_error_report.emit(f"Subtitle repeat set out of range: {values}")
+            return
+        GstSubtitleWorker.set_repeat(values)
+
+    def subtitle_color_lines_set(self, data:str):
+        if data != '0' and data != '1':
+            log.debug("Color lines setting is invalid")
+            self.qsignal_mediaengine_error_report.emit(f"Subtitle color lines set invalid: {data}")
+            return
+
+        if data == '0':
+            GstSubtitleWorker.set_color_lines(False)
+        else:
+            GstSubtitleWorker.set_color_lines(True)
 
     def single_play(self, file_uri: str, file_ext: str):
         log.debug(f"single_play, file_uri={file_uri}, file_ext={file_ext}")
