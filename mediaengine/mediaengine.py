@@ -36,6 +36,7 @@ class MediaEngine(QObject):
         self.play_single_file_worker = None
         self.playlist_mgr = PlaylistManager(PLAYLISTS_URI_PATH)
         self._current_file = 'None'
+        self.gst_player = None
         # self._current_playlist = 'None'
         # need to get default from config file
         self._cancel_auto_next_once = False
@@ -72,31 +73,27 @@ class MediaEngine(QObject):
         self.qsignal_play_single_file_paused.connect(slot_func)
 
     def _play_single_file_worker_with_cmd(self, cmd_args, auto_kill_after=None):
-        if self.media_engine_status == PlayStatus.FINISHED or self.media_engine_status == PlayStatus.IDLE:
-            self.play_single_file_worker = None
-            self.play_single_file_thread = None
-        # If previous running, ask to stop first
-        if self.play_single_file_thread is not None and self.play_single_file_thread.isRunning():
-            log.debug("Playing, Please Stop First")
-            return
+        self.gst_player = GstSingleFileWorker(cmd_args, auto_kill_after)
+        self.gst_player.install_gst_single_file_play_proc_finished(
+            self._on_play_single_file_worker_finished)
+        self.gst_player.install_gst_single_file_play_proc_started(
+            self._on_play_single_file_worker_started)
+        self.gst_player.install_gst_single_file_play_proc_paused(
+            self._on_play_single_file_worker_paused)
+        self.gst_player.install_gst_single_file_play_proc_status(
+            self._on_play_single_file_worker_status)
+        self.gst_player.start()
 
-        # Create worker + thread
-        self.play_single_file_worker = GstSingleFileWorker(cmd_args, auto_kill_after=auto_kill_after)
-        self.play_single_file_thread = QThread()
-        self.play_single_file_worker.moveToThread(self.play_single_file_thread)
-        self.play_single_file_thread.started.connect(self.play_single_file_worker.run)
-        self.play_single_file_worker.gst_single_file_play_proc_finished.connect(self._on_play_single_file_worker_finished)
-        self.play_single_file_worker.gst_single_file_play_proc_started.connect(self._on_play_single_file_worker_started)
-        self.play_single_file_worker.install_gst_single_file_play_proc_paused(self._on_play_single_file_worker_paused)
-        self.play_single_file_worker.install_gst_single_file_play_proc_status(self._on_play_single_file_worker_status)
-        # cleanup when thread finishes
-        self.play_single_file_worker.gst_single_file_play_proc_finished.connect(lambda ok, reason: self.play_single_file_thread.quit())
-        self.play_single_file_thread.finished.connect(self.play_single_file_thread.deleteLater)
-        self.play_single_file_thread.start()
 
     def _on_play_single_file_worker_finished(self, result, reason):
         log.debug(f"_on_play_single_file_worker_finished res:{result}")
         self.qsignal_play_single_file_finished.emit(reason)
+        try:
+            if self.play_single_file_thread is not None and self.play_single_file_thread.isRunning():
+                self.play_single_file_thread.quit()
+                self.play_single_file_thread.wait()
+        except Exception as e:
+            log.error(e)
 
     def _on_play_single_file_worker_started(self):
         log.debug("_on_play_single_file_worker_started")
@@ -113,26 +110,19 @@ class MediaEngine(QObject):
 
     def _render_subtitle_worker_with_cmd(self, cmd_args, auto_kill_after=None):
         if self.media_engine_status == PlayStatus.FINISHED or self.media_engine_status == PlayStatus.IDLE:
-            self.play_single_file_worker = None
-            self.play_single_file_thread = None
+            self.gst_player = None
         # If previous running, ask to stop first
-        if self.play_single_file_thread is not None and self.play_single_file_thread.isRunning():
+        if self.gst_player is not None and self.gst_player.is_running():
             log.debug("Playing, Please Stop First")
             return
 
-        # Create worker + thread
-        self.play_single_file_worker = GstSubtitleWorker(cmd_args, auto_kill_after = auto_kill_after)
-        self.play_single_file_thread = QThread()
-        self.play_single_file_worker.moveToThread(self.play_single_file_thread)
-        self.play_single_file_thread.started.connect(self.play_single_file_worker.run)
-        self.play_single_file_worker.gst_subtitle_render_finished.connect(self._on_render_subtitle_worker_finished)
-        self.play_single_file_worker.gst_subtitle_render_started.connect(self._on_render_subtitle_worker_started)
-        self.play_single_file_worker.gst_subtitle_render_paused.connect(self._on_render_subtitle_worker_paused)
-        self.play_single_file_worker.gst_subtitle_render_status.connect(self._on_render_subtitle_worker_status)
-        # cleanup when thread finishes
-        self.play_single_file_worker.gst_subtitle_render_finished.connect(lambda ok, reason: self.play_single_file_thread.quit())
-        self.play_single_file_thread.finished.connect(self.play_single_file_thread.deleteLater)
-        self.play_single_file_thread.start()
+        # Create worker
+        self.gst_player = GstSubtitleWorker(cmd_args, auto_kill_after = auto_kill_after)
+        self.gst_player.install_gst_subtitle_render_finished(self._on_render_subtitle_worker_finished)
+        self.gst_player.install_gst_subtitle_render_started(self._on_render_subtitle_worker_started)
+        self.gst_player.install_gst_subtitle_render_paused(self._on_render_subtitle_worker_paused)
+        self.gst_player.install_gst_subtitle_render_status(self._on_render_subtitle_worker_status)
+        self.gst_player.run()
 
     def _on_render_subtitle_worker_finished(self, result, reason):
         log.debug(f"_on_render_subtitle_worker_finished resson:{result}")
@@ -168,13 +158,7 @@ class MediaEngine(QObject):
         if not p.is_file():
             return "None"
         return p.stem
-    '''
-    def get_current_playlist(self) -> str:
-        p = pathlib.Path(self._current_playlist)
-        if not p.is_file():
-            return "None"
-        return p.stem
-    '''
+
     def set_still_image_play_period(self, _still_image_play_period: int):
         # Change to write to file
         # self.still_image_play_period = still_image_play_period
@@ -193,11 +177,7 @@ class MediaEngine(QObject):
     def set_current_file(self, sub_file_uri: str):
         self._current_file = MEDIAFILE_URI_PATH + sub_file_uri
         log.debug(f"self._current_file :{self._current_file}")
-    '''
-    def set_current_playlist(self, sub_playlist: str):
-        self._current_playlist = PLAYLISTS_URI_PATH + sub_playlist
-        log.debug(f"self._current_playlist :{self._current_playlist}")
-    '''
+
     def single_play_from_cmd(self):
         p = pathlib.Path(self._current_file)
         if not p.is_file():
@@ -218,43 +198,69 @@ class MediaEngine(QObject):
 
         self.single_play(self._current_file, p.suffix)
 
+    def subtitle_color_set(self, r:int, g:int, b:int):
+        GstSubtitleWorker.set_color(r, g, b)
+
+    def subtitle_repeat_set(self, times:str):
+        try:
+            values = int(times)
+        except Exception as e:
+            log.debug(f"Convert to int failed: {e}")
+            self.qsignal_mediaengine_error_report.emit(f"Subtitle repeat set invalid: {times}")
+            return
+
+        if values != 0 and values != 1 and values != -1:
+            self.qsignal_mediaengine_error_report.emit(f"Subtitle repeat set out of range: {values}")
+            return
+        GstSubtitleWorker.set_repeat(values)
+
+    def subtitle_color_lines_set(self, data:str):
+        if data != '0' and data != '1':
+            log.debug("Color lines setting is invalid")
+            self.qsignal_mediaengine_error_report.emit(f"Subtitle color lines set invalid: {data}")
+            return
+
+        if data == '0':
+            GstSubtitleWorker.set_color_lines(False)
+        else:
+            GstSubtitleWorker.set_color_lines(True)
+
     def single_play(self, file_uri: str, file_ext: str):
-        log.debug("single_play, file_uri={}".format(file_uri))
+        log.debug(f"single_play, file_uri={file_uri}, file_ext={file_ext}")
         # check play thread alive or not
         log.debug("Need to check play thread alive or not")
+        # self.stop_single_file_play()
+        if self.gst_player is not None:
+            self.gst_player.stop_if_running()
+
         abs_path = os.path.abspath(file_uri)
         if file_ext == ".mp4":
-            if platform.machine() == 'x86_64':
-                pipeline = f"filesrc location={shlex.quote(abs_path)} ! decodebin ! videoconvert ! autovideosink"
-            else:
-                pipeline = f"filesrc location={shlex.quote(abs_path)} ! decodebin ! videoconvert ! waylandsink"
-            gst_cmd = ["gst-launch-1.0", "-e"] + shlex.split(pipeline)
+            gst_cmd = f"{shlex.quote(abs_path)}"
             self._play_single_file_worker_with_cmd(gst_cmd, auto_kill_after=None)
-        elif file_ext in ['jpg', 'jpeg', 'png', 'webp']:
-            if platform.machine() == 'x86_64':
-                pipeline = f"filesrc location={shlex.quote(abs_path)} ! decodebin ! imagefreeze ! videoconvert ! autovideosink"
-            else:
-                pipeline = f"filesrc location={shlex.quote(abs_path)} ! decodebin ! imagefreeze ! videoconvert ! waylandsink"
-            gst_cmd = ["gst-launch-1.0", "-e"] + shlex.split(pipeline)
+        elif file_ext in ['.jpg', '.jpeg', '.png', '.webp']:
+            gst_cmd = f"{shlex.quote(abs_path)}"
             self._play_single_file_worker_with_cmd(gst_cmd, auto_kill_after=self.still_image_play_period)
         elif file_ext == '.txt':
             gst_cmd = f"{shlex.quote(abs_path)}"
-            self._render_subtitle_worker_with_cmd(gst_cmd, auto_kill_after = None)
+            self._render_subtitle_worker_with_cmd(gst_cmd, auto_kill_after=None)
 
     def stop_single_file_play(self):
         log.debug("stop_play")
-        if self.play_single_file_worker:
-            self.play_single_file_worker.stop_if_running()
+        if self.gst_player is not None:
+            self.gst_player.stop_if_running()
+
 
     def pause_single_file_play(self):
         log.debug("pause_single_file_play")
-        if self.play_single_file_worker and self.play_single_file_thread.isRunning():
-            self.play_single_file_worker.pause_if_running()
+        if self.gst_player is not None:
+            self.gst_player.pause_if_running()
+
 
     def resume_single_file_play(self):
         log.debug("resume_single_file_play")
-        if self.play_single_file_worker and self.play_single_file_thread.isRunning():
-            self.play_single_file_worker.resume_if_running()
+        if self.gst_player is not None:
+            self.gst_player.resume_if_running()
+
 
     # ---------------- Playlist control ----------------
     def playlist_create(self, name: str) -> dict:
