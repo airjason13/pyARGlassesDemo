@@ -32,8 +32,7 @@ class MediaEngine(QObject):
         self._playlist_index = None
         self._playlist_files = None
         self._current_playlist = None
-        self.play_single_file_thread = None
-        self.play_single_file_worker = None
+
         self.playlist_mgr = PlaylistManager(PLAYLISTS_URI_PATH)
         self._current_file = 'None'
         self.gst_player = None
@@ -88,12 +87,7 @@ class MediaEngine(QObject):
     def _on_play_single_file_worker_finished(self, result, reason):
         log.debug(f"_on_play_single_file_worker_finished res:{result}")
         self.qsignal_play_single_file_finished.emit(reason)
-        try:
-            if self.play_single_file_thread is not None and self.play_single_file_thread.isRunning():
-                self.play_single_file_thread.quit()
-                self.play_single_file_thread.wait()
-        except Exception as e:
-            log.error(e)
+
 
     def _on_play_single_file_worker_started(self):
         log.debug("_on_play_single_file_worker_started")
@@ -249,7 +243,6 @@ class MediaEngine(QObject):
         if self.gst_player is not None:
             self.gst_player.stop_if_running()
 
-
     def pause_single_file_play(self):
         log.debug("pause_single_file_play")
         if self.gst_player is not None:
@@ -291,20 +284,7 @@ class MediaEngine(QObject):
         return self.playlist_mgr.remove_playlist(name)
 
     def playlist_play(self) -> dict:
-        try:
-            if self.play_single_file_thread and self.play_single_file_thread.isRunning():
-                log.debug("[Playlist] Old thread still running, stopping it first.")
-                if self.play_single_file_worker:
-                    self.play_single_file_worker.stop_if_running()
-                self.play_single_file_thread.quit()
-                self.play_single_file_thread.wait(500)
-        except RuntimeError:
-            log.warning("[Playlist] play_single_file_thread was already deleted, resetting.")
-        except Exception as e:
-            log.warning(f"[Playlist] Error while resetting old thread: {e}")
-
-        self.play_single_file_thread = None
-        self.play_single_file_worker = None
+        self.stop_single_file_play()
 
         # --- Verify Playlist ---
         if not self.playlist_mgr or not self.playlist_mgr.current_list:
@@ -333,16 +313,6 @@ class MediaEngine(QObject):
         return {"status": "OK", "playing": self.playlist_mgr.current_list, "count": len(files_buffer)}
 
     def _playlist_play_item(self):
-        # --- Prevent Qt thread from being referenced even after it has been deleted ---
-        if not hasattr(self, "play_single_file_thread") or self.play_single_file_thread is None:
-            self.play_single_file_thread = None
-        else:
-            try:
-                _ = self.play_single_file_thread.isRunning()
-            except RuntimeError:
-                log.warning("[Playlist] play_single_file_thread was deleted, resetting.")
-                self.play_single_file_thread = None
-
         # --- Verify playlist status ---
         if not hasattr(self, "_playlist_files") or not self._playlist_files:
             log.warning("[Playlist] No active playlist files.")
@@ -358,12 +328,6 @@ class MediaEngine(QObject):
             self._playlist_files = []
             self._playlist_index = 0
             return
-
-        # --- Ensure the previous thread ends normally ---
-        if self.play_single_file_thread and self.play_single_file_thread.isRunning():
-            log.debug("[Playlist] Waiting previous thread to finish...")
-            self.play_single_file_thread.quit()
-            self.play_single_file_thread.wait(500)
 
         # --- Play the currently indexed video ---
         f = self._playlist_files[self._playlist_index].lstrip("/")
@@ -399,13 +363,8 @@ class MediaEngine(QObject):
             log.warning("[Playlist] No playlist is currently playing.")
             return {"status": "NG", "error": "No active playlist"}
 
-        # Stop the current playback
-        if self.play_single_file_worker:
-            try:
-                log.info("[Playlist] Skipping current file...")
-                self.play_single_file_worker.stop_if_running()
-            except Exception as e:
-                log.warning(f"[Playlist] stop_if_running exception: {e}")
+        log.info("[Playlist] Skipping current file...")
+        self.stop_single_file_play()
 
         self._playlist_index += 1
         if self._playlist_index >= len(self._playlist_files):
@@ -423,13 +382,8 @@ class MediaEngine(QObject):
             log.warning("[Playlist] No playlist is currently playing.")
             return {"status": "NG", "error": "No active playlist"}
 
-        # Stop the current playback
-        if self.play_single_file_worker:
-            try:
-                log.info("[Playlist] Going to previous file, stopping current player...")
-                self.play_single_file_worker.stop_if_running()
-            except Exception as e:
-                log.warning(f"[Playlist] stop_if_running exception: {e}")
+        log.info("[Playlist] Going to previous file, stopping current player...")
+        self.stop_single_file_play()
 
         self._playlist_index -= 1
         if self._playlist_index < 0:
@@ -441,27 +395,22 @@ class MediaEngine(QObject):
         self._playlist_play_item()
         return {"status": "OK", "message": "Previous item started"}
 
-    def playlist_stop(self) -> dict:
+    def playlist_stop(self):
         log.info("[Playlist] Stop requested")
 
-        # Stop the currently playing video
-        if self.play_single_file_worker:
-            try:
-                self.play_single_file_worker.stop_if_running()
-            except Exception as e:
-                log.warning(f"[Playlist] stop_if_running exception: {e}")
-
-        # Reset playlist status
-        self._playlist_files = []
-        self._playlist_index = 0
-
-        # Disconnect the playback end event to avoid accidentally touching the next song
+        # Break callbacks first
         try:
             self.qsignal_play_single_file_finished.disconnect(self._handle_playlist_auto_next)
         except Exception:
             pass
 
-        # Status Update
+        # Stop the actual playback worker
+        self.stop_single_file_play()
+
+        # Reset playlist status
+        self._playlist_files = []
+        self._playlist_index = 0
+
         self.media_engine_status = PlayStatus.IDLE
         self.qsignal_media_play_status_changed.emit(self.media_engine_status)
 
@@ -568,20 +517,7 @@ class MediaEngine(QObject):
 
     def playlist_play_at(self, name: str | None = None, index: int = 0) -> dict:
         # Stop playing safely first
-        try:
-            if self.play_single_file_worker:
-                self.play_single_file_worker.stop_if_running()
-        except:
-            pass
-        try:
-            if self.play_single_file_thread and self.play_single_file_thread.isRunning():
-                self.play_single_file_thread.quit()
-                self.play_single_file_thread.wait()
-        except:
-            pass
-
-        self.play_single_file_thread = None
-        self.play_single_file_worker = None
+        self.playlist_stop()
 
         # Determine playlist name
         if not name:
@@ -610,20 +546,6 @@ class MediaEngine(QObject):
         self._playlist_files = files
         self._playlist_index = index
 
-        # Reset thread (same as playlist_play)
-        try:
-            if self.play_single_file_thread and self.play_single_file_thread.isRunning():
-                if self.play_single_file_worker:
-                    self.play_single_file_worker.stop_if_running()
-                self.play_single_file_thread.quit()
-                self.play_single_file_thread.wait(500)
-        except RuntimeError:
-            log.warning("[Playlist] play_single_file_thread was already deleted, resetting.")
-        except Exception as e:
-            log.warning(f"[Playlist] Error while resetting thread: {e}")
-
-        self.play_single_file_thread = None
-        self.play_single_file_worker = None
 
         # Ensure auto-next installed
         try:
