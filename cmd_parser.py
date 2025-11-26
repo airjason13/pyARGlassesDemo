@@ -268,7 +268,7 @@ class CmdParser(QObject):
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 
-    def demo_get_playlist_get_item(self, data: dict):
+    def demo_get_playlist_get_current_file(self, data: dict):
         data['src'], data['dst'] = data['dst'], data['src']
         result = self.media_engine.playlist_get_current_file()
         data['data'] = json.dumps(result, ensure_ascii=False)
@@ -358,7 +358,7 @@ class CmdParser(QObject):
         DEMO_SET_PLAYLIST_REMOVE_PLAYLIST: demo_set_playlist_remove_playlist,
         DEMO_SET_PLAYLIST_NEXT_ITEM: demo_set_playlist_next,
         DEMO_SET_PLAYLIST_PREV_ITEM: demo_set_playlist_prev,
-        DEMO_GET_PLAYLIST_GET_ITEM: demo_get_playlist_get_item,
+        DEMO_GET_PLAYLIST_GET_CURRENT_FILE: demo_get_playlist_get_current_file,
         DEMO_SET_PLAYLIST_BATCH_ADD: demo_set_playlist_batch_add,
         DEMO_SET_PLAYLIST_BATCH_REMOVE_BY_NAME: demo_set_playlist_batch_remove_by_name,
         DEMO_SET_PLAYLIST_BATCH_REMOVE_BY_INDEX: demo_set_playlist_batch_remove_by_index,

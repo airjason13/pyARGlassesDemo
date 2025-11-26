@@ -21,7 +21,7 @@ class PlaylistPage(QWidget):
         self.btn_remove_batch_items_by_index = None
         self.btn_add_batch_items = None
         self.test_sock_cmd = False
-        self.btn_get_item = None
+        self.btn_get_current_playing_item = None
         self.btn_prev = None
         self.btn_next = None
         self.text_output = None
@@ -133,9 +133,10 @@ class PlaylistPage(QWidget):
 
         self.btn_get_all = QPushButton("📂 Get All\n全部清單")
         self.btn_get_list = QPushButton("📜 Get Current list\n當前清單")
-        self.btn_get_item = QPushButton("🎬 Get Current item\n正在播放")
+        self.btn_get_current_playing_item = QPushButton("🎬 Get Current item\n正在播放")
         self.btn_remove_playlist = QPushButton("🗑 Remove\n刪除清單")
-        layout.addLayout(make_row(self.btn_get_all, self.btn_get_list, self.btn_get_item, self.btn_remove_playlist))
+        layout.addLayout(make_row(self.btn_get_all, self.btn_get_list,
+                                  self.btn_get_current_playing_item, self.btn_remove_playlist))
 
         # --- Section 4: Test Playlist Batch Commands ---
         section4 = QLabel("🧪 Playlist Batch Commands")
@@ -217,7 +218,7 @@ class PlaylistPage(QWidget):
         self.btn_remove_playlist.clicked.connect(self.on_remove_playlist)
         self.btn_next.clicked.connect(self.on_next)
         self.btn_prev.clicked.connect(self.on_prev)
-        self.btn_get_item.clicked.connect(self.on_get_item)
+        self.btn_get_current_playing_item.clicked.connect(self.on_get_playing_item)
         self.btn_add_batch_items.clicked.connect(self.on_add_batch_items)
         self.btn_remove_batch_items_by_name.clicked.connect(self.on_remove_batch_items_by_name)
         self.btn_remove_batch_items_by_index.clicked.connect(self.on_remove_batch_items_by_index)
@@ -325,7 +326,7 @@ class PlaylistPage(QWidget):
         result = self.media_engine.playlist_skip_prev()
         self.output_result(result)
 
-    def on_get_item(self):
+    def on_get_playing_item(self):
         result = self.media_engine.playlist_get_current_file()
         self.output_result(result)
 
