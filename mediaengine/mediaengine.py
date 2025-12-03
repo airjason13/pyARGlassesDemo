@@ -283,63 +283,46 @@ class MediaEngine(QObject):
     def playlist_remove_playlist(self, name: str) -> dict:
         return self.playlist_mgr.remove_playlist(name)
 
-    def playlist_play(self) -> dict:
-        self.stop_single_file_play()
+    def _playlist_play_item(self, direction=+1):
+        """
+        Play the current playlist item.
+        direction=+1: next
+        direction=-1: prev
+        """
 
-        # --- Verify Playlist ---
-        if not self.playlist_mgr or not self.playlist_mgr.current_list:
-            return {"status": "NG", "error": "No playlist selected"}
-
-        self._current_playlist = self.playlist_mgr.current_list
-
-        files_buffer = self.playlist_mgr._get_files_in_current_list().get("files", [])
-        if not files_buffer:
-            return {"status": "NG", "error": f"Playlist '{self.playlist_mgr.current_list}' is empty"}
-
-        # --- Initialize playback status ---
-        self._playlist_files = files_buffer
-        self._playlist_index = 0
-
-        # Ensure that the signal is not repeatedly connected
-        try:
-            self.qsignal_play_single_file_finished.disconnect(self._handle_playlist_auto_next)
-        except Exception:
-            pass
-        self.qsignal_play_single_file_finished.connect(self._handle_playlist_auto_next)
-
-        log.info(f"[Playlist] Start playing list: {self.playlist_mgr.current_list}, total: {len(files_buffer)}")
-        self._playlist_play_item()
-
-        return {"status": "OK", "playing": self.playlist_mgr.current_list, "count": len(files_buffer)}
-
-    def _playlist_play_item(self):
-        # --- Verify playlist status ---
-        if not hasattr(self, "_playlist_files") or not self._playlist_files:
-            log.warning("[Playlist] No active playlist files.")
+        # No playlist
+        if not getattr(self, "_playlist_files", None):
+            log.warning("[Playlist] No active playlist.")
             return
 
-        if self._playlist_index >= len(self._playlist_files):
-            log.info("[Playlist] All files finished.")
-            # Clean signal
-            try:
-                self.qsignal_play_single_file_finished.disconnect(self._handle_playlist_auto_next)
-            except Exception:
-                pass
-            self._playlist_files = []
-            self._playlist_index = 0
+        total = len(self._playlist_files)
+        if total == 0:
             return
 
-        # --- Play the currently indexed video ---
+        # Prevent index overflow
+        self._playlist_index %= total
+
         f = self._playlist_files[self._playlist_index].lstrip("/")
         abs_path = os.path.join(MEDIAFILE_URI_PATH, f)
+
+        # File does not exist → Still submit to FINISHED
         if not os.path.exists(abs_path):
-            log.warning(f"[Playlist] File not found: {abs_path}")
-            self._playlist_index += 1
-            self._playlist_play_item()
+            log.warning(f"[Playlist] File missing: {abs_path}")
+
+            # TX FINISHED
+            self.playlist_notify_status(PlayStatus.FINISHED, reason="FILE_NOT_FOUND")
+  
+            # Move index
+            self._playlist_index = (self._playlist_index + direction) % total
+
+            # Next Video
+            self._playlist_play_item(direction)
             return
 
+        # Normal playback
         p = pathlib.Path(abs_path)
-        log.info(f"[Playlist] Playing ({self._playlist_index+1}/{len(self._playlist_files)}): {p}")
+        log.info(f"[Playlist] Playing ({self._playlist_index + 1}/{total}): {p}")
+
         self.single_play(str(p), p.suffix)
 
     def _handle_playlist_auto_next(self, reason):
@@ -359,40 +342,41 @@ class MediaEngine(QObject):
 
     def playlist_skip_next(self):
         self._cancel_auto_next_once = True
-        if not hasattr(self, "_playlist_files") or not self._playlist_files:
+        if not getattr(self, "_playlist_files", None):
             log.warning("[Playlist] No playlist is currently playing.")
             return {"status": "NG", "error": "No active playlist"}
 
         log.info("[Playlist] Skipping current file...")
         self.stop_single_file_play()
 
-        self._playlist_index += 1
-        if self._playlist_index >= len(self._playlist_files):
-            log.info("[Playlist] Already at last item.")
-            self._playlist_index = 0
-            # return {"status": "OK", "message": "Reached end of playlist"}
+        # Move to next index (safe modulo form)
+        total = len(self._playlist_files)
+        self._playlist_index = (self._playlist_index + 1) % total
+        log.info(f"[Playlist] Moving to next ({self._playlist_index + 1}/{total})")
 
-        log.info(f"[Playlist] Moving to next ({self._playlist_index+1}/{len(self._playlist_files)})")
-        self._playlist_play_item()
+        self._playlist_play_item(direction=+1)
         return {"status": "OK", "message": "Next item started"}
 
     def playlist_skip_prev(self) -> dict:
         self._cancel_auto_next_once = True
-        if not hasattr(self, "_playlist_files") or not self._playlist_files:
+
+        if not getattr(self, "_playlist_files", None):
             log.warning("[Playlist] No playlist is currently playing.")
             return {"status": "NG", "error": "No active playlist"}
 
         log.info("[Playlist] Going to previous file, stopping current player...")
         self.stop_single_file_play()
 
-        self._playlist_index -= 1
-        if self._playlist_index < 0:
-            log.info("[Playlist] Already at first item, looping to last one.")
-            self._playlist_index = len(self._playlist_files) - 1
-            # return {"status": "OK", "message": "Reached beginning of playlist"}
+        total = len(self._playlist_files)
 
-        log.info(f"[Playlist] Moving to previous ({self._playlist_index+1}/{len(self._playlist_files)})")
-        self._playlist_play_item()
+        # Move to previous (safe modulo handling)
+        self._playlist_index = (self._playlist_index - 1) % total
+
+        log.info(f"[Playlist] Moving to previous ({self._playlist_index + 1}/{total})")
+
+        # Play previous; direction = PREV
+        self._playlist_play_item(direction=-1)
+
         return {"status": "OK", "message": "Previous item started"}
 
     def playlist_stop(self):
@@ -566,6 +550,13 @@ class MediaEngine(QObject):
             "fpath": files[index]
         }
 
+    def playlist_notify_status(self, status,reason=""):
+
+        self.media_engine_status = status
+        self.qsignal_media_play_status_changed.emit(self.media_engine_status)
+        log.info(f"[playlist] status sent ({reason})")
+
+        return
 
 
 

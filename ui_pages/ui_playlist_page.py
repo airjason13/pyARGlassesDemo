@@ -11,7 +11,7 @@ from unix_client import UnixClient
 class PlaylistPage(QWidget):
     name = 'Playlist'
 
-    def __init__(self, _main_window, _central_qwidget, **kwargs):
+    def __init__(self, _main_window, _central_qwidget, media_engine, **kwargs):
         super(PlaylistPage, self).__init__(**kwargs)
 
         self.input_index = None
@@ -39,7 +39,7 @@ class PlaylistPage(QWidget):
         self.main_window = _main_window
         self.central_widget = _central_qwidget
         self.label_title = None
-        self.media_engine = MediaEngine()
+        self.media_engine = media_engine
         self.init_ui()
         # === For Test ===
         if self.test_sock_cmd:

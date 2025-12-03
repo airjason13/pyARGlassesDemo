@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout
 
 class EngPage(QWidget):
     name = 'Eng'
-    def __init__(self, _main_window, _central_qwidget, **kwargs):
+    def __init__(self, _main_window, _central_qwidget,media_engine, **kwargs):
         super(EngPage, self).__init__(**kwargs)
         self.main_window = _main_window
         self.central_widget = _central_qwidget

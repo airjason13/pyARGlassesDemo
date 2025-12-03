@@ -14,12 +14,12 @@ class MediaPage(QWidget):
     name = 'Media'
 
 
-    def __init__(self, _main_window, _central_qwidget, **kwargs):
+    def __init__(self, _main_window, _central_qwidget, media_engine, **kwargs):
         super(MediaPage, self).__init__(**kwargs)
         self.main_window = _main_window
         self.central_widget = _central_qwidget
         self.label_title = None
-        self.media_engine = MediaEngine()
+        self.media_engine = media_engine
         self.media_engine.install_play_single_file_started(self.play_single_file_started)
         self.media_engine.install_play_single_file_finished(self.play_single_file_finished)
         self.media_engine.install_play_single_file_paused(self.play_single_file_paused)

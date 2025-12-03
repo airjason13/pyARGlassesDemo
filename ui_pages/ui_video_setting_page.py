@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout
 
 class VideoSettingPage(QWidget):
     name = 'Video_Setting'
-    def __init__(self, _main_window, _central_qwidget, **kwargs):
+    def __init__(self, _main_window, _central_qwidget,media_engine, **kwargs):
         super(VideoSettingPage, self).__init__(**kwargs)
         self.main_window = _main_window
         self.central_widget = _central_qwidget

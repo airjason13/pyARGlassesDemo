@@ -5,6 +5,7 @@ import signal
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QApplication, QStackedLayout
 from PyQt5.QtCore import Qt, QTimer
 
+from mediaengine.mediaengine import MediaEngine
 from ui_pages.ui_eng_test_page import EngPage
 from ui_pages.ui_playlist_page import PlaylistPage
 from unix_server import UnixServer
@@ -33,6 +34,7 @@ class CMainWindow(QMainWindow):
     TEST_FLAG = False # For Eng Page Show socket cmd
     def __init__(self, async_loop):
         super().__init__()
+        self.media_engine = None
         self.playlist_mgr = None
         self.label = None
         log.debug("MainWindow up!")
@@ -118,9 +120,9 @@ class CMainWindow(QMainWindow):
 
         self.setCentralWidget(self.central_widget)
         self.page_layout = QStackedLayout()
-
+        self.media_engine = MediaEngine()
         for page_cls in Page_List:
-            page = page_cls(self, self.central_widget)
+            page = page_cls(self, self.central_widget,self.media_engine)
             self.page_list.append(page)
             self.page_layout.addWidget(page)
 
