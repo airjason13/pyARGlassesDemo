@@ -147,8 +147,29 @@ def set_persist_config_str(persist_filename: str, def_value: str) -> None:
         f.write(def_value)
 
 
+def get_persist_config_float(persist_filename: str, def_value: float) -> float:
+    path_persist_folder = Path(PERSIST_CONFIG_URI_PATH)
+    path_persist_folder.mkdir(parents=True, exist_ok=True)
+    target_persist_uri = Path(os.path.join(PERSIST_CONFIG_URI_PATH, persist_filename))
 
+    if not target_persist_uri.exists():
+        with open(target_persist_uri, 'w', encoding='utf-8') as f:
+            f.write(str(def_value))
 
+    try:
+        with open(target_persist_uri, 'r', encoding='utf-8') as f:
+            str_value = f.read().strip()
+        return float(str_value)
+    except:
+        return def_value
+    
+def set_persist_config_float(persist_filename: str, value: float) -> None:
+    path_persist_folder = Path(PERSIST_CONFIG_URI_PATH)
+    path_persist_folder.mkdir(parents=True, exist_ok=True)
+    target_persist_uri = Path(os.path.join(PERSIST_CONFIG_URI_PATH, persist_filename))
+
+    with open(target_persist_uri, 'w', encoding='utf-8') as f:
+        f.write(str(value))
 
 # 範例：
 if __name__ == "__main__":

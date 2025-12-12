@@ -14,6 +14,10 @@ class PlaylistPage(QWidget):
     def __init__(self, _main_window, _central_qwidget, media_engine, **kwargs):
         super(PlaylistPage, self).__init__(**kwargs)
 
+        self.btn_vol_up = None
+        self.btn_vol_down = None
+        self.label_volume = None
+       
         self.input_index = None
         self.batch_inputs = None
         self.btn_expand_all_playlists = None
@@ -138,7 +142,48 @@ class PlaylistPage(QWidget):
         layout.addLayout(make_row(self.btn_get_all, self.btn_get_list,
                                   self.btn_get_current_playing_item, self.btn_remove_playlist))
 
-        # --- Section 4: Test Playlist Batch Commands ---
+        # --- Section 4: Volume Control ---
+        section_vol = QLabel("🔊 Volume Control")
+        section_vol.setStyleSheet("color: lightyellow; font-weight: bold; font-size: 16px;")
+        layout.addWidget(section_vol)
+
+        vol_row = QHBoxLayout()
+
+        self.btn_vol_down = QPushButton("－")
+        self.btn_vol_up = QPushButton("＋")
+
+        self.btn_vol_down.setFixedWidth(60)
+        self.btn_vol_up.setFixedWidth(60)
+
+        for b in (self.btn_vol_down, self.btn_vol_up):
+            b.setStyleSheet("""
+                        QPushButton {
+                            font-size: 20px;
+                            padding: 8px;
+                            background-color: #444;
+                            color: white;
+                            border-radius: 6px;
+                        }
+                        QPushButton:hover { background-color: #666; }
+                    """)
+
+        self.label_volume = QLabel(f"{int(self.media_engine.current_volume * 100)}%")
+        self.label_volume.setStyleSheet("font-size: 16px; color: white; margin-left: 12px;")
+
+        vol_row.addWidget(self.btn_vol_down)
+        vol_row.addWidget(self.btn_vol_up)
+        vol_row.addWidget(self.label_volume)
+
+        layout.addLayout(vol_row)
+
+
+        # ---
+
+        # Connect
+        self.btn_vol_down.clicked.connect(self.on_vol_down)
+        self.btn_vol_up.clicked.connect(self.on_vol_up)
+
+        # --- Section 5: Test Playlist Batch Commands ---
         section4 = QLabel("🧪 Playlist Batch Commands")
         section4.setStyleSheet("color: lightgreen; font-weight: bold; font-size: 16px;")
         layout.addWidget(section4)
@@ -416,3 +461,17 @@ class PlaylistPage(QWidget):
             lambda msg: self.text_output.setPlainText(msg)
         )
         parser.demo_get_playlist_expand_all(test_data)
+
+    def on_vol_down(self):
+        new = max(0.0, self.media_engine.current_volume - 0.05)
+        new = round(new, 2)
+        self.media_engine.set_volume(new)
+        self.label_volume.setText(f"{int(new * 100)}%")
+
+
+    def on_vol_up(self):
+        max_boost = self.media_engine.max_volume_boost
+        new = min(max_boost, self.media_engine.current_volume + 0.05)
+        new = round(new, 2)
+        self.media_engine.set_volume(new)
+        self.label_volume.setText(f"{int(new * 100)}%")

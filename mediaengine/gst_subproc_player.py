@@ -18,13 +18,15 @@ class GstSingleFileWorker(QObject):
     gst_single_file_play_proc_paused = pyqtSignal()
     gst_single_file_play_proc_status = pyqtSignal(int)
 
-    def __init__(self, cmd_args, auto_kill_after=None):
+    def __init__(self, cmd_args, auto_kill_after=None , parent_engine=None):
         super().__init__()
         self.cmd_args = cmd_args
         self.auto_kill_after = auto_kill_after
         self.pipeline = None
         self.running = False
         self.still_image_fps = 5
+        self.volume_elem = None
+        self.parent_engine = parent_engine
 
     def install_gst_single_file_play_proc_paused(self, slot_func):
         self.gst_single_file_play_proc_paused.connect(slot_func)
@@ -42,19 +44,47 @@ class GstSingleFileWorker(QObject):
         log.debug("create_pipeline")
 
         p = pathlib.Path(self.cmd_args)
-        if p.suffix == ".mp4":
-            sink = "autovideosink" if platform.machine() == "x86_64" else "waylandsink"
-            str_pipeline = f"filesrc location={shlex.quote(self.cmd_args)} ! decodebin ! videoconvert ! {sink}"
+        file_path = shlex.quote(self.cmd_args)
+
+        # ---------------------------
+        # 1. MP4 → Video + Audio
+        # ---------------------------
+        if p.suffix.lower() == ".mp4":
+
+            if platform.machine() == "x86_64":
+                video_sink = "autovideosink"
+                audio_sink = "autoaudiosink"
+                video_convert = "videoconvert"
+            else:
+                video_sink = "waylandsink"
+                audio_sink = "alsasink device=hw:1,0"
+                video_convert = "imxvideoconvert_pxp"
+
+            str_pipeline = (
+                f"filesrc location={file_path} ! decodebin name=d "
+                f"d. ! queue ! {video_convert} ! {video_sink} "
+                f"d. ! queue ! audioconvert ! audioresample ! "
+                f"volume name=vol ! {audio_sink}"
+            )
+
+        # ---------------------------
+        # 2. Image（JPG / PNG / WEBP）
+        # ---------------------------
         else:
             str_pipeline = (
-                f"multifilesrc location={shlex.quote(self.cmd_args)} ! decodebin ! "
+                f"multifilesrc location={file_path} ! decodebin ! "
                 "imagefreeze ! videoconvert ! video/x-raw ! autovideosink"
             )
 
+        # Log pipeline for debugging
         log.debug(f"pipeline: {str_pipeline}")
 
+        # ---------------------------
+        # 3. Pipeline launch
+        # ---------------------------
         try:
-            return Gst.parse_launch(str_pipeline)
+            pipeline = Gst.parse_launch(str_pipeline)
+            return pipeline
         except Exception as e:
             log.error(f"Failed to parse pipeline: {e}")
             return None
@@ -64,14 +94,26 @@ class GstSingleFileWorker(QObject):
         Gst.init(None)
         self.running = True
 
+        # Create GStreamer pipeline
         self.pipeline = self.create_pipeline()
         if not self.pipeline:
             self.gst_single_file_play_proc_finished.emit(False, "Pipeline error")
             return
-
+        # Optional: make videosink non-blocking (avoid sync issues)
         sink = self.pipeline.get_by_name("sink")
         if sink:
             sink.set_property("sync", False)
+
+        #  Volume Element Initialization
+        self.volume_elem = self.pipeline.get_by_name("vol")
+        if self.volume_elem is None:
+            log.warning("[GstWorker] volume element not found in pipeline")
+        else:
+            log.debug("[GstWorker] volume element initialized")
+            try:
+                self.volume_elem.set_property("volume", self.parent_engine.current_volume)
+            except:
+                pass
 
         # ✅ 用 bus signal，不用 GLib.MainLoop
         bus = self.pipeline.get_bus()

@@ -8,7 +8,8 @@ import os
 import shlex
 import time
 
-from utils.file_utils import get_persist_config_int, set_persist_config_int
+from utils.file_utils import get_persist_config_int, set_persist_config_int, get_persist_config_float, \
+    set_persist_config_float
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, QTimer
 
 from global_def import *
@@ -39,17 +40,42 @@ class MediaEngine(QObject):
         # self._current_playlist = 'None'
         # need to get default from config file
         self._cancel_auto_next_once = False
+        self.current_volume = 1.0
+        self.max_volume_boost = 2.0
 
         self.media_engine_status = PlayStatus.IDLE
+
         log.warn("check still_image_play_period later")
         self.still_image_play_period = get_persist_config_int(PERSIST_STILL_IMAGE_PLAY_PERIOD_CONFIG_FILENAME,
                                                               DEFAULT_STILL_IMAGE_PLAY_PERIOD_INT)
+
         # log.debug("still image playing period is %d", self.still_image_play_period)
         self.still_image_play_period_file_watcher = FileWatcher(
                                                         [os.path.join(PERSIST_CONFIG_URI_PATH,
                                                         PERSIST_STILL_IMAGE_PLAY_PERIOD_CONFIG_FILENAME)])
+
         self.still_image_play_period_file_watcher.install_file_changed_slot(self.refresh_still_image_play_period)
 
+        self.current_volume = get_persist_config_float(
+            PERSIST_VOLUME_CONFIG_FILENAME,
+            DEFAULT_VOLUME_FLOAT
+        )
+        self.volume_file_watcher = FileWatcher([
+            os.path.join(PERSIST_CONFIG_URI_PATH, PERSIST_VOLUME_CONFIG_FILENAME)
+        ])
+        self.volume_file_watcher.install_file_changed_slot(self.refresh_volume_changed)
+
+    def refresh_volume_changed(self):
+        new_v = get_persist_config_float(PERSIST_VOLUME_CONFIG_FILENAME,
+                                         DEFAULT_VOLUME_FLOAT)
+
+        new_v = max(0.0, min(self.max_volume_boost, new_v))
+        self.current_volume = new_v
+
+        if self.gst_player and self.gst_player.volume_elem:
+            self.gst_player.volume_elem.set_property("volume", new_v)
+
+        log.info(f"[Volume] Updated from persist: {new_v}")
 
     def refresh_still_image_play_period(self):
         self.still_image_play_period = get_persist_config_int(PERSIST_STILL_IMAGE_PLAY_PERIOD_CONFIG_FILENAME,
@@ -72,7 +98,11 @@ class MediaEngine(QObject):
         self.qsignal_play_single_file_paused.connect(slot_func)
 
     def _play_single_file_worker_with_cmd(self, cmd_args, auto_kill_after=None):
-        self.gst_player = GstSingleFileWorker(cmd_args, auto_kill_after)
+        if self.gst_player is not None:
+            self.gst_player.stop_if_running()
+            self.gst_player = None
+
+        self.gst_player = GstSingleFileWorker(cmd_args, auto_kill_after, parent_engine=self)
         self.gst_player.install_gst_single_file_play_proc_finished(
             self._on_play_single_file_worker_finished)
         self.gst_player.install_gst_single_file_play_proc_started(
@@ -558,5 +588,16 @@ class MediaEngine(QObject):
 
         return
 
-
+    def set_volume(self, value: float):
+        """value: 0.0 ~ max_volume_boost"""
+        clamped = max(0.0, min(self.max_volume_boost, value))
+        if clamped != value:
+            log.debug(f"[Volume] input {value} clamped to {clamped}")
+        self.current_volume = clamped
+        # apply to running pipeline
+        if self.gst_player and self.gst_player.volume_elem:
+            self.gst_player.volume_elem.set_property("volume", clamped)
+        # save persist
+        set_persist_config_float(PERSIST_VOLUME_CONFIG_FILENAME, clamped)
+        log.info(f"[Volume] set_volume -> {clamped}")
 
