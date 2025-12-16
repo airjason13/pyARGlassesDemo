@@ -406,8 +406,8 @@ class CmdParser(QObject):
         DEMO_SET_PLAYLIST_BATCH_REMOVE_BY_INDEX: demo_set_playlist_batch_remove_by_index,
         DEMO_GET_PLAYLIST_EXPAND_ALL: demo_get_playlist_expand_all,
 
-        CMD_SET_MEDIA_VOLUME:demo_set_meida_volume,
-        CMD_GET_MEDIA_VOLUME:demo_get_meida_volume,
+        DEMO_SET_MEDIA_VOLUME:demo_set_meida_volume,
+        DEMO_GET_MEDIA_VOLUME:demo_get_meida_volume,
         DEMO_SET_TEST: demo_set_test,
     }
 
