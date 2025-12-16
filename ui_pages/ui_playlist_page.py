@@ -463,10 +463,46 @@ class PlaylistPage(QWidget):
         parser.demo_get_playlist_expand_all(test_data)
 
     def on_vol_down(self):
+
         new = max(0.0, self.media_engine.current_volume - 0.05)
         new = round(new, 2)
+
         self.media_engine.set_volume(new)
         self.label_volume.setText(f"{int(new * 100)}%")
+
+        '''
+        parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
+
+        test_data = {
+            "src": "mobile",
+            "dst": "demo",
+            "data": "{}"
+        }
+
+        def parser_volume(msg: str):
+            try:
+                parts = dict(item.split(":", 1) for item in msg.split(";"))
+                payload = json.loads(parts.get("data", "{}"))
+
+                volume = payload.get("volume")
+                max_volume = payload.get("max")
+
+                self.label_volume.setText(f"{int(volume * 100)}%")
+                self.text_output.setPlainText(
+                    f"volume={volume}, max={max_volume}"
+                )
+
+                # Minus 0.5
+                new = max(0.0, volume - 0.05)
+                new = round(new, 2)
+                self.media_engine.set_volume(new)
+                self.label_volume.setText(f"{int(new * 100)}%")
+            finally:
+                parser.unix_data_ready_to_send.disconnect(parser_volume)
+
+        parser.unix_data_ready_to_send.connect(parser_volume)
+        parser.demo_get_meida_volume(test_data)
+        '''
 
 
     def on_vol_up(self):

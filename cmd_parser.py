@@ -325,6 +325,48 @@ class CmdParser(QObject):
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 
+    def demo_set_meida_volume(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+        try:
+            payload = json.loads(data.get("data", "{}"))
+            volume = float(payload.get("volume"))
+            self.media_engine.set_volume(volume)
+            result = {
+                "status": "OK",
+                "volume": self.media_engine.current_volume
+            }
+            data['data'] = json.dumps(result, ensure_ascii=False)
+        except Exception as e:
+            log.error(f"demo_set_meida_volume error: {e}")
+            data['data'] = json.dumps(
+                {"status": "NG", "error": str(e)},
+                ensure_ascii=False
+            )
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_get_meida_volume(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+
+        try:
+            result = {
+                "status": "OK",
+                "volume": self.media_engine.current_volume,
+                "max": self.media_engine.max_volume_boost
+            }
+
+            data['data'] = json.dumps(result, ensure_ascii=False)
+
+        except Exception as e:
+            log.error(f"demo_get_meida_volume error: {e}")
+            data['data'] = json.dumps(
+                {"status": "NG", "error": str(e)},
+                ensure_ascii=False
+            )
+
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
     cmd_function_map = {
         DEMO_GET_SW_VERSION: demo_get_sw_version,
         DEMO_GET_MEDIAFILE_FILE_LIST: demo_get_mediafile_file_list,
@@ -364,6 +406,8 @@ class CmdParser(QObject):
         DEMO_SET_PLAYLIST_BATCH_REMOVE_BY_INDEX: demo_set_playlist_batch_remove_by_index,
         DEMO_GET_PLAYLIST_EXPAND_ALL: demo_get_playlist_expand_all,
 
+        CMD_SET_MEDIA_VOLUME:demo_set_meida_volume,
+        CMD_GET_MEDIA_VOLUME:demo_get_meida_volume,
         DEMO_SET_TEST: demo_set_test,
     }
 
