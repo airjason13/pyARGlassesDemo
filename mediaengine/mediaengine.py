@@ -215,7 +215,7 @@ class MediaEngine(QObject):
         self.single_play(self._current_file, p.suffix)
 
     def render_subtitle_from_cmd(self):
-        self._current_file = MEDIAFILE_URI_PATH + FILENAME_SUBTITLE
+        self._current_file = TEMPORARY_SUBTITLE_URI_PATH
         p = pathlib.Path(self._current_file)
         if not p.is_file():
             log.debug(f"single_play_from_cmd error, no such file:{self._current_file}")

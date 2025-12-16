@@ -5,7 +5,6 @@ import utils.log_utils
 from version import Version
 from arglassescmd.cmd_def import *
 LOG_FILE_PREFIX = "ar_glasses_demo.log"
-FILENAME_SUBTITLE = 'subtitle.txt'
 
 log = utils.log_utils.logging_init(__file__, LOG_FILE_PREFIX)
 
@@ -15,8 +14,6 @@ if platform.machine() == 'x86_64':
 else:
     FULL_SCREEN_UI = True
     ENG_UI = False
-
-
 
 UNIX_MSG_SERVER_URI = '/tmp/ipc_msg_server.sock'
 UNIX_DEMO_APP_SERVER_URI = '/tmp/ipc_demo_app_server.sock'
@@ -41,5 +38,7 @@ else:
     THUMBNAILS_URI_PATH = "/root/MediaFiles/thumbnails/"
     PLAYLISTS_URI_PATH = "/root/MediaFiles/Playlists/"
     PERSIST_CONFIG_URI_PATH = "/root/persist_config/"
+
+TEMPORARY_SUBTITLE_URI_PATH = "/tmp/subtitle.txt"
 
 UNIX_SOCKET_BUFFER_SIZE = 8*1024*1024

@@ -120,10 +120,10 @@ class CmdParser(QObject):
 
     def demo_set_mediaengine_render_subtitle(self, data:dict):
         log.debug("data : %s", data.get('data'))
-        pathSubtitlFolder = Path(MEDIAFILE_URI_PATH)
-        pathSubtitlFolder.mkdir(parents=True, exist_ok=True)
+        # pathSubtitlFolder = Path(MEDIAFILE_URI_PATH)
+        # pathSubtitlFolder.mkdir(parents=True, exist_ok=True)
 
-        pathSubtitlFile = Path(MEDIAFILE_URI_PATH + FILENAME_SUBTITLE)
+        pathSubtitlFile = Path(TEMPORARY_SUBTITLE_URI_PATH)
         if pathSubtitlFile.exists():
             if pathSubtitlFile.is_file():
                 pathSubtitlFile.unlink()                # remove file
