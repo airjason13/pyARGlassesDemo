@@ -501,7 +501,7 @@ class PlaylistPage(QWidget):
                 parser.unix_data_ready_to_send.disconnect(parser_volume)
 
         parser.unix_data_ready_to_send.connect(parser_volume)
-        parser.demo_get_meida_volume(test_data)
+        parser.demo_get_media_volume(test_data)
         '''
 
 

@@ -325,7 +325,7 @@ class CmdParser(QObject):
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 
-    def demo_set_meida_volume(self, data: dict):
+    def demo_set_media_volume(self, data: dict):
         data['src'], data['dst'] = data['dst'], data['src']
         try:
             payload = json.loads(data.get("data", "{}"))
@@ -337,7 +337,7 @@ class CmdParser(QObject):
             }
             data['data'] = json.dumps(result, ensure_ascii=False)
         except Exception as e:
-            log.error(f"demo_set_meida_volume error: {e}")
+            log.error(f"demo_set_media_volume error: {e}")
             data['data'] = json.dumps(
                 {"status": "NG", "error": str(e)},
                 ensure_ascii=False
@@ -345,7 +345,7 @@ class CmdParser(QObject):
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 
-    def demo_get_meida_volume(self, data: dict):
+    def demo_get_media_volume(self, data: dict):
         data['src'], data['dst'] = data['dst'], data['src']
 
         try:
@@ -358,7 +358,7 @@ class CmdParser(QObject):
             data['data'] = json.dumps(result, ensure_ascii=False)
 
         except Exception as e:
-            log.error(f"demo_get_meida_volume error: {e}")
+            log.error(f"demo_get_media_volume error: {e}")
             data['data'] = json.dumps(
                 {"status": "NG", "error": str(e)},
                 ensure_ascii=False
@@ -406,8 +406,8 @@ class CmdParser(QObject):
         DEMO_SET_PLAYLIST_BATCH_REMOVE_BY_INDEX: demo_set_playlist_batch_remove_by_index,
         DEMO_GET_PLAYLIST_EXPAND_ALL: demo_get_playlist_expand_all,
 
-        DEMO_SET_MEDIA_VOLUME:demo_set_meida_volume,
-        DEMO_GET_MEDIA_VOLUME:demo_get_meida_volume,
+        DEMO_SET_MEDIA_VOLUME:demo_set_media_volume,
+        DEMO_GET_MEDIA_VOLUME:demo_get_media_volume,
         DEMO_SET_TEST: demo_set_test,
     }
 

@@ -5,7 +5,7 @@ import signal
 import subprocess
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import Gst, GLib, GObject
+from gi.repository import Gst, GLib, GObject,GstPbutils
 from PyQt5.QtCore import QObject, pyqtSignal
 
 from global_def import *
@@ -40,12 +40,24 @@ class GstSingleFileWorker(QObject):
     def install_gst_single_file_play_proc_status(self, slot_func):
         self.gst_single_file_play_proc_status.connect(slot_func)
 
+    def has_audio_stream(self, file_path):
+        discoverer = GstPbutils.Discoverer.new(Gst.SECOND)
+        try:
+            uri = pathlib.Path(os.path.abspath(file_path)).as_uri()
+            info = discoverer.discover_uri(uri)
+
+            audio_streams = info.get_audio_streams()
+            return len(audio_streams) > 0
+        except Exception as e:
+            log.error(f"Discoverer failed: {e}")
+            return False
+
     def create_pipeline(self):
         log.debug("create_pipeline")
 
         p = pathlib.Path(self.cmd_args)
         file_path = shlex.quote(self.cmd_args)
-
+        has_audio = self.has_audio_stream(file_path)
         # ---------------------------
         # 1. MP4 → Video + Audio
         # ---------------------------
@@ -60,12 +72,18 @@ class GstSingleFileWorker(QObject):
                 audio_sink = "alsasink device=hw:1,0"
                 video_convert = "imxvideoconvert_pxp"
 
-            str_pipeline = (
-                f"filesrc location={file_path} ! decodebin name=d "
-                f"d. ! queue ! {video_convert} ! {video_sink} "
-                f"d. ! queue ! audioconvert ! audioresample ! "
-                f"volume name=vol ! {audio_sink}"
-            )
+            if has_audio:
+                str_pipeline = (
+                    f"filesrc location={shlex.quote(file_path)} ! decodebin name=d "
+                    f"d. ! queue ! {video_convert} ! {video_sink} "
+                    f"d. ! queue ! audioconvert ! audioresample ! "
+                    f"volume name=vol ! {audio_sink}"
+                )
+            else:
+                str_pipeline = (
+                    f"filesrc location={shlex.quote(file_path)} ! "
+                    f"decodebin ! videoconvert ! {video_sink}"
+                )
 
         # ---------------------------
         # 2. Image（JPG / PNG / WEBP）
