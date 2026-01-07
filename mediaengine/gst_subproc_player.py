@@ -52,6 +52,18 @@ class GstSingleFileWorker(QObject):
             log.error(f"Discoverer failed: {e}")
             return False
 
+    def setup_audio_session(self):
+        if platform.machine() == "x86_64":
+            return
+        os.environ["XDG_RUNTIME_DIR"] = "/run/user/0"
+        try:
+            result = subprocess.run(["pgrep", "-x", "pipewire-pulse"], capture_output=True)
+            if result.returncode != 0:
+                log.debug("Starting pipewire-pulse within ARGlassesDemo...")
+                subprocess.Popen(["pipewire-pulse"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            log.error(f"Failed to manage pipewire-pulse: {e}")
+
     def create_pipeline(self):
         log.debug("create_pipeline")
 
@@ -69,15 +81,17 @@ class GstSingleFileWorker(QObject):
                 video_convert = "videoconvert"
             else:
                 video_sink = "waylandsink"
-                audio_sink = "alsasink device=hw:1,0"
+                # audio_sink = "alsasink device=hw:1,0"
+                audio_sink = "pulsesink"
                 video_convert = "imxvideoconvert_pxp"
 
             if has_audio:
+                self.setup_audio_session()
                 str_pipeline = (
                     f"filesrc location={shlex.quote(file_path)} ! decodebin name=d "
                     f"d. ! queue ! {video_convert} ! {video_sink} "
                     f"d. ! queue ! audioconvert ! audioresample ! "
-                    f"volume name=vol ! {audio_sink}"
+                    f"volume name=vol ! {audio_sink} "
                 )
             else:
                 str_pipeline = (
