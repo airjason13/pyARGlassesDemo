@@ -42,6 +42,7 @@ class MediaEngine(QObject):
         self._cancel_auto_next_once = False
         self.current_volume = 1.0
         self.max_volume_boost = 2.0
+        self.nav_player = None
 
         self.media_engine_status = PlayStatus.IDLE
 
@@ -64,6 +65,17 @@ class MediaEngine(QObject):
             os.path.join(PERSIST_CONFIG_URI_PATH, PERSIST_VOLUME_CONFIG_FILENAME)
         ])
         self.volume_file_watcher.install_file_changed_slot(self.refresh_volume_changed)
+
+    def set_nav_player(self, nav_player):
+        self.nav_player = nav_player
+
+    def _stop_nav_if_running(self):
+        try:
+            if self.nav_player and self.nav_player.pipeline is not None:
+                log.info("[MediaEngine] nav is active, stop nav before media playback")
+                self.nav_player.stop()
+        except Exception as e:
+            log.error(f"[MediaEngine] failed to stop nav player: {e}")
 
     def refresh_volume_changed(self):
         new_v = get_persist_config_float(PERSIST_VOLUME_CONFIG_FILENAME,
@@ -98,6 +110,9 @@ class MediaEngine(QObject):
         self.qsignal_play_single_file_paused.connect(slot_func)
 
     def _play_single_file_worker_with_cmd(self, cmd_args, auto_kill_after=None):
+
+        self._stop_nav_if_running()
+
         if self.gst_player is not None:
             self.gst_player.stop_if_running()
             self.gst_player = None

@@ -24,7 +24,7 @@ class PlaylistPage(QWidget):
         self.btn_remove_batch_items_by_name = None
         self.btn_remove_batch_items_by_index = None
         self.btn_add_batch_items = None
-        self.test_sock_cmd = False
+
         self.btn_get_current_playing_item = None
         self.btn_prev = None
         self.btn_next = None
@@ -45,10 +45,9 @@ class PlaylistPage(QWidget):
         self.label_title = None
         self.media_engine = media_engine
         self.init_ui()
-        # === For Test ===
-        if self.test_sock_cmd:
-            dummy_client = UnixClient("/tmp/ipc_test.sock")
-            self.cmd_parser = CmdParser(dummy_client, self.media_engine)
+        self.main_window.cmd_parser.unix_data_ready_to_send.connect(
+            self._on_cmd_ready_to_send
+        )
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -282,6 +281,9 @@ class PlaylistPage(QWidget):
             }
         """)
 
+    def _on_cmd_ready_to_send(self, msg):
+        self.text_output.setPlainText(msg)
+
     def output_result(self, result: dict):
         text = json.dumps(result, indent=2, ensure_ascii=False)
         self.text_output.setPlainText(text)
@@ -341,18 +343,13 @@ class PlaylistPage(QWidget):
             "index": index,
         }
 
-        parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
-
         test_data = {
             "src": "mobile",
             "dst": "demo",
             "data": json.dumps(payload, ensure_ascii=False),
         }
 
-        parser.unix_data_ready_to_send.connect(
-            lambda msg: self.text_output.setPlainText(msg)
-        )
-        parser.demo_set_playlist_play(test_data)
+        self.main_window.cmd_parser.demo_set_playlist_play(test_data)
 
     def on_stop(self):
         result = self.media_engine.playlist_stop()
@@ -388,16 +385,13 @@ class PlaylistPage(QWidget):
             self.output_result({"status": "NG", "error": "Please enter playlist names and items"})
             return
 
-        parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
         test_data = {
             "src": "mobile",
             "dst": "demo",
             "data": json.dumps({"playlists": playlists}, ensure_ascii=False)
         }
-        parser.unix_data_ready_to_send.connect(
-            lambda msg: self.text_output.setPlainText(msg)
-        )
-        parser.demo_set_playlist_batch_add(test_data)
+
+        self.main_window.cmd_parser.demo_set_playlist_batch_add(test_data)
 
     def on_remove_batch_items_by_name(self):
         playlists = []
@@ -411,16 +405,14 @@ class PlaylistPage(QWidget):
             self.output_result({"status": "NG", "error": "Please enter playlist names and items"})
             return
 
-        parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
         test_data = {
             "src": "mobile",
             "dst": "demo",
             "data": json.dumps({"playlists": playlists}, ensure_ascii=False)
         }
-        parser.unix_data_ready_to_send.connect(
-            lambda msg: self.text_output.setPlainText(msg)
-        )
-        parser.demo_set_playlist_batch_remove_by_name(test_data)
+
+        self.main_window.cmd_parser.demo_set_playlist_batch_remove_by_name(test_data)
+
 
     def on_remove_batch_items_by_index(self):
         playlists = []
@@ -439,28 +431,21 @@ class PlaylistPage(QWidget):
             self.output_result({"status": "NG", "error": "Please enter playlist names and indexes"})
             return
 
-        parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
         test_data = {
             "src": "mobile",
             "dst": "demo",
             "data": json.dumps({"playlists": playlists}, ensure_ascii=False)
         }
-        parser.unix_data_ready_to_send.connect(
-            lambda msg: self.text_output.setPlainText(msg)
-        )
-        parser.demo_set_playlist_batch_remove_by_index(test_data)
+
+        self.main_window.cmd_parser.demo_set_playlist_batch_remove_by_index(test_data)
 
     def on_get_playlist_expand_all(self):
-        parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
         test_data = {
             "src": "mobile",
             "dst": "demo",
             "data": "{}"
         }
-        parser.unix_data_ready_to_send.connect(
-            lambda msg: self.text_output.setPlainText(msg)
-        )
-        parser.demo_get_playlist_expand_all(test_data)
+        self.main_window.cmd_parser.demo_get_playlist_expand_all(test_data)
 
     def on_vol_down(self):
 
@@ -471,8 +456,6 @@ class PlaylistPage(QWidget):
         self.label_volume.setText(f"{int(new * 100)}%")
 
         '''
-        parser = CmdParser(UnixClient("/tmp/ipc_test.sock"), self.media_engine)
-
         test_data = {
             "src": "mobile",
             "dst": "demo",
@@ -500,8 +483,7 @@ class PlaylistPage(QWidget):
             finally:
                 parser.unix_data_ready_to_send.disconnect(parser_volume)
 
-        parser.unix_data_ready_to_send.connect(parser_volume)
-        parser.demo_get_media_volume(test_data)
+        self.main_window.cmd_parser.demo_get_media_volume(test_data)
         '''
 
 

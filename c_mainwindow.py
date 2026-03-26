@@ -6,14 +6,18 @@ from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QApplicat
 from PyQt5.QtCore import Qt, QTimer
 
 from mediaengine.mediaengine import MediaEngine
-from ui_pages.ui_eng_test_page import EngPage
-from ui_pages.ui_playlist_page import PlaylistPage
+from navengine.nav_player import ARNavPlayer
+
 from unix_server import UnixServer
 from unix_client import UnixClient
 from cmd_parser import CmdParser
 from global_def import *
+
+from ui_pages.ui_eng_test_page import EngPage
+from ui_pages.ui_playlist_page import PlaylistPage
 from ui_pages.ui_media_page import MediaPage
 from ui_pages.ui_video_setting_page import VideoSettingPage
+from ui_pages.ui_nsight_page import NsightPage
 
 class PageListEnum(enum.IntEnum):
     Media = 0
@@ -21,11 +25,12 @@ class PageListEnum(enum.IntEnum):
     Video_Setting = 2
     Eng = 3
 
-Page_Select_Btn_Name_List = ["Media", "Playlist" ,"Video_Setting", "Eng"]
+Page_Select_Btn_Name_List = ["Media", "Playlist" ,"Video_Setting", "Eng", "Nsight"]
 Page_List = [MediaPage, # 0
              PlaylistPage, # 1
              VideoSettingPage, # 2
              EngPage, # 3
+             NsightPage, # 4
              ]
 
 # Page_Map = dict(zip(Page_Select_Btn_Name_List, Page_List))
@@ -35,6 +40,7 @@ class CMainWindow(QMainWindow):
     def __init__(self, async_loop):
         super().__init__()
         self.media_engine = None
+        self.nav_player = None
         self.playlist_mgr = None
         self.label = None
         log.debug("MainWindow up!")
@@ -45,17 +51,29 @@ class CMainWindow(QMainWindow):
         self.layout = None
         self.page_layout = None
         # self.initUI()
-        self.init_ui()
-        self.unix_server = UnixServer(UNIX_DEMO_APP_SERVER_URI)
-        self.unix_server.unix_data_received.connect(self.unix_data_received_handler)
-        self.msg_app_unix_client = UnixClient(path=UNIX_MSG_SERVER_URI)
-        self.cmd_parser = CmdParser(self.msg_app_unix_client, self.page_list[PageListEnum.Media].get_media_engine())
-        self.cmd_parser.unix_data_ready_to_send.connect(self.send_to_msg_server)
+        self._init_core_component()
+        self._init_ui()
+
         QTimer.singleShot(0, lambda: asyncio.create_task(self.unix_server.start()))
         QTimer.singleShot(0, lambda: asyncio.create_task(self.msg_app_unix_client.connect()))
 
         signal.signal(signal.SIGINT, self.stop_server)
 
+    def _init_core_component(self):
+        self.nav_player = ARNavPlayer()
+        self.media_engine = MediaEngine()
+
+        self.media_engine.set_nav_player(self.nav_player)
+        self.nav_player.set_media_engine(self.media_engine)
+
+        self.unix_server = UnixServer(UNIX_DEMO_APP_SERVER_URI)
+        self.unix_server.unix_data_received.connect(self.unix_data_received_handler)
+        self.msg_app_unix_client = UnixClient(path=UNIX_MSG_SERVER_URI)
+
+        self.cmd_parser = CmdParser(self.msg_app_unix_client,
+                                    self.media_engine,
+                                    self.nav_player,
+                                    )
 
     def test_timer(self):
         pass
@@ -108,7 +126,7 @@ class CMainWindow(QMainWindow):
         log.debug("init_pages")
 
 
-    def init_ui(self):
+    def _init_ui(self):
         log.debug("init_ui")
         if FULL_SCREEN_UI:
             # 設定視窗為全螢幕、無邊框、無標題列, Press Esc to exit
@@ -120,7 +138,7 @@ class CMainWindow(QMainWindow):
 
         self.setCentralWidget(self.central_widget)
         self.page_layout = QStackedLayout()
-        self.media_engine = MediaEngine()
+
         for page_cls in Page_List:
             page = page_cls(self, self.central_widget,self.media_engine)
             self.page_list.append(page)

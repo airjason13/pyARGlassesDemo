@@ -30,6 +30,7 @@ if platform.machine() == 'x86_64':
     THUMBNAILS_URI_PATH = f"/home/{current_user}/Videos/thumbnails/"
     PLAYLISTS_URI_PATH = f"/home/{current_user}/Videos/Playlists/"
     PERSIST_CONFIG_URI_PATH = f"/home/{current_user}/Videos/persist/"
+    NAV_ASSET_URI_PATH = f"/home/{current_user}/Videos/nav_assets/"
 else:
     MEDIAFILE_URI_PATH = "/root/MediaFiles/"
     SNAPSHOTS_URI_PATH = "/root/MediaFiles/Snapshots/"
@@ -38,6 +39,7 @@ else:
     THUMBNAILS_URI_PATH = "/root/MediaFiles/thumbnails/"
     PLAYLISTS_URI_PATH = "/root/MediaFiles/Playlists/"
     PERSIST_CONFIG_URI_PATH = "/root/persist_config/"
+    NAV_ASSET_URI_PATH = "/root/MediaFiles/nav_assets/"
 
 TEMPORARY_SUBTITLE_URI_PATH = "/tmp/subtitle.txt"
 

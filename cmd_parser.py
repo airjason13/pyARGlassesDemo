@@ -1,6 +1,8 @@
 from global_def import *
 from mediaengine.media_engine_def import PlayStatus_Dict
 from mediaengine.mediaengine import MediaEngine
+from navengine.nav_def import SUPPORTED_NAV_DIRECTIONS
+from navengine.nav_player import ARNavPlayer
 from utils.file_utils import *
 
 from PyQt5.QtCore import QObject, pyqtSignal
@@ -8,13 +10,15 @@ from PyQt5.QtCore import QObject, pyqtSignal
 from unix_client import UnixClient
 import shutil
 from pathlib import Path
+import json
 
 class CmdParser(QObject):
     unix_data_ready_to_send = pyqtSignal(str)
-    def __init__(self, msg_unix_client:UnixClient, media_engine:MediaEngine):
+    def __init__(self, msg_unix_client:UnixClient, media_engine:MediaEngine, nav_player:ARNavPlayer):
         super().__init__()
         self.msg_unix_client = msg_unix_client
         self.media_engine = media_engine
+        self.nav_player = nav_player
         self.media_engine.install_media_play_status_changed(self.media_engine_status_changed)
         self.media_engine.install_media_engine_error_report(self.media_engine_error_report)
 
@@ -367,6 +371,65 @@ class CmdParser(QObject):
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 
+    def demo_set_nav_state(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+
+        try:
+            # parse JSON
+            payload = json.loads(data.get("data", "{}"))
+
+            direction = payload.get("direction")
+            road_name = payload.get("road_name")
+            distance_m = payload.get("distance_m")
+
+            if direction is None or road_name is None or distance_m is None:
+                raise ValueError("Invalid data format")
+
+            if direction not in SUPPORTED_NAV_DIRECTIONS:
+                result = {
+                    "status": "NG",
+                    "error": "Invalid direction"
+                }
+            else:
+                self.nav_player.set_nav_state(direction,road_name,distance_m)
+                log.info(f"[NAV] direction={direction}, road={road_name}, dist={distance_m}")
+                # self.main_window.switch_page("Nav")
+
+                result = {
+                    "status": "OK"
+                }
+
+        except Exception as e:
+            log.error(f"demo_set_nav_state error: {e}")
+            result = {
+                "status": "NG",
+                "error": "Invalid data format"
+            }
+
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
+    def demo_set_nav_stop(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+
+        try:
+            self.nav_player.stop()
+            log.info("[NAV] stop")
+
+            result = {
+                "status": "OK"
+            }
+
+        except Exception as e:
+            log.error(f"demo_set_nav_stop error: {e}")
+            result = {
+                "status": "NG"
+            }
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
     cmd_function_map = {
         DEMO_GET_SW_VERSION: demo_get_sw_version,
         DEMO_GET_MEDIAFILE_FILE_LIST: demo_get_mediafile_file_list,
@@ -409,6 +472,9 @@ class CmdParser(QObject):
         DEMO_SET_MEDIA_VOLUME:demo_set_media_volume,
         DEMO_GET_MEDIA_VOLUME:demo_get_media_volume,
         DEMO_SET_TEST: demo_set_test,
+
+        DEMO_SET_NAV_STATE:demo_set_nav_state,
+        DEMO_SET_NAV_STOP:demo_set_nav_stop,
     }
 
     ''''''
