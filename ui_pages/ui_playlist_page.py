@@ -45,6 +45,8 @@ class PlaylistPage(QWidget):
         self.label_title = None
         self.media_engine = media_engine
         self.init_ui()
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setFocus()
         self.main_window.cmd_parser.unix_data_ready_to_send.connect(
             self._on_cmd_ready_to_send
         )
