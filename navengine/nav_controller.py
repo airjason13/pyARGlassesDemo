@@ -1,5 +1,7 @@
+import io
 import os
 import platform
+import subprocess
 import gi
 
 gi.require_version("Gst", "1.0")
@@ -7,6 +9,11 @@ from gi.repository import Gst
 
 from navengine.nav_def import *
 from global_def import *
+
+try:
+    from PIL import Image
+except Exception:
+    Image = None
 
 
 class ARNavPlayer:
@@ -23,6 +30,11 @@ class ARNavPlayer:
         self.caps_filter = None
         self.video_sink = None
 
+        self.map_overlay = None
+        self.current_map_image_path = None
+        self.nav_tmp_dir = "/tmp"
+        self.webp_supported = self._system_support_webp()
+
         self.road_overlay = None
         self.hint_overlay = None
         self.dist_value_overlay = None
@@ -38,6 +50,8 @@ class ARNavPlayer:
         self.nav_window_height = 480
 
         self.bus = None
+
+        log.info(f"[NAV] gdk-pixbuf webp support: {self.webp_supported}")
 
     def set_media_engine(self, media_engine):
         self.media_engine = media_engine
@@ -102,7 +116,9 @@ class ARNavPlayer:
         self.dist_unit_overlay.set_property("ypos", 0.78)
         self.dist_unit_overlay.set_property("shaded-background", False)
 
-    def _update_text_only(self):
+        self._refresh_text_only()
+
+    def _refresh_text_only(self):
         dist_value, dist_unit = self._format_distance(self.distance_m)
         hint_text = self._get_hint_text(self.direction)
 
@@ -145,6 +161,8 @@ class ARNavPlayer:
         self.video_scale = Gst.ElementFactory.make("videoscale", "vscale")
         self.caps_filter = Gst.ElementFactory.make("capsfilter", "caps")
 
+        self.map_overlay = Gst.ElementFactory.make("gdkpixbufoverlay", "map_overlay")
+
         self.road_overlay = Gst.ElementFactory.make("textoverlay", "road")
         self.hint_overlay = Gst.ElementFactory.make("textoverlay", "hint")
         self.dist_value_overlay = Gst.ElementFactory.make("textoverlay", "dist_value")
@@ -159,6 +177,7 @@ class ARNavPlayer:
             self.video_convert,
             self.video_scale,
             self.caps_filter,
+            self.map_overlay,
             self.road_overlay,
             self.hint_overlay,
             self.dist_value_overlay,
@@ -171,15 +190,21 @@ class ARNavPlayer:
 
         if self.fixed_window_size:
             caps = Gst.Caps.from_string(
-                f"video/x-raw,width={self.nav_window_width},height={self.nav_window_height}"
+                f"video/x-raw,width={self.nav_window_width},height={self.nav_window_height},pixel-aspect-ratio=1/1"
             )
             self.caps_filter.set_property("caps", caps)
+
+        # Map layer Positon
+        self.map_overlay.set_property("alpha", 0.0)
+        self.map_overlay.set_property("offset-x", 430)
+        self.map_overlay.set_property("offset-y", 220)
 
         self.pipeline.add(self.src)
         self.pipeline.add(self.decodebin)
         self.pipeline.add(self.video_convert)
         self.pipeline.add(self.video_scale)
         self.pipeline.add(self.caps_filter)
+        self.pipeline.add(self.map_overlay)
         self.pipeline.add(self.road_overlay)
         self.pipeline.add(self.hint_overlay)
         self.pipeline.add(self.dist_value_overlay)
@@ -197,8 +222,11 @@ class ARNavPlayer:
         if not self.video_scale.link(self.caps_filter):
             raise RuntimeError("Failed to link videoscale -> capsfilter")
 
-        if not self.caps_filter.link(self.road_overlay):
-            raise RuntimeError("Failed to link capsfilter -> road_overlay")
+        if not self.caps_filter.link(self.map_overlay):
+            raise RuntimeError("Failed to link capsfilter -> map_overlay")
+
+        if not self.map_overlay.link(self.road_overlay):
+            raise RuntimeError("Failed to link map_overlay -> road_overlay")
 
         if not self.road_overlay.link(self.hint_overlay):
             raise RuntimeError("Failed to link road_overlay -> hint_overlay")
@@ -215,6 +243,12 @@ class ARNavPlayer:
         self._setup_overlays()
         self.current_video_path = video_path
         self._connect_bus()
+
+        if self.current_map_image_path:
+            try:
+                self.map_overlay.set_property("location", self.current_map_image_path)
+            except Exception as e:
+                log.error(f"[NAV] apply existing map overlay failed: {e}")
 
     def _switch_video(self, video_path):
         if not self.pipeline or not self.src:
@@ -261,7 +295,6 @@ class ARNavPlayer:
             self._stop_pipeline()
 
     def set_nav_state(self, direction: str, road_name: str, distance_m: int):
-
         self._stop_media_if_running()
 
         if direction not in SUPPORTED_NAV_DIRECTIONS:
@@ -293,12 +326,121 @@ class ARNavPlayer:
         else:
             self._switch_video(video_path)
 
-        self._update_text_only()
+        self._refresh_text_only()
 
-    def update_nav_text(self, road_name: str, distance_m: int):
-        self.road_name = str(road_name)
-        self.distance_m = int(distance_m)
-        self._update_text_only()
+    def set_nav_map_image(self, file_name: str = "nav_map_image", hex_str: str = ""):
+        """
+        Convert WebP HEX data to /tmp/<name>.webp.
+        If gdk-pixbuf does not support WebP, convert it to PNG.
+        If hex_str is empty, hide the map layer.
+        """
+        file_name = (file_name or "").strip()
+        hex_str = (hex_str or "").strip()
+
+        if not hex_str:
+            log.info("[NAV] clear NAV_MAP_IMAGE")
+            self.current_map_image_path = None
+
+            if self.map_overlay:
+                try:
+                    self.map_overlay.set_property("alpha", 0.0)
+                except Exception as e:
+                    log.error(f"[NAV] clear map overlay failed: {e}")
+            return
+
+        try:
+            out_path = self._save_webp_or_convert_to_png(file_name, hex_str)
+            self.current_map_image_path = out_path
+            log.info(f"[NAV] NAV_MAP_IMAGE updated: {out_path}")
+
+            if self.map_overlay:
+                try:
+                    # Hide → Output Map → Show
+                    self.map_overlay.set_property("alpha", 0.0)
+                    self.map_overlay.set_property("location", out_path)
+                    self.map_overlay.set_property("alpha", 1.0)
+                except Exception as e:
+                    log.error(f"[NAV] apply map overlay failed: {e}")
+
+        except Exception as e:
+            log.error(f"[NAV] set_nav_map_image error: {e}")
+
+    def _system_support_webp(self) -> bool:
+        try:
+            out = subprocess.check_output(
+                ["gdk-pixbuf-query-loaders"],
+                stderr=subprocess.DEVNULL
+            ).decode(errors="ignore")
+            return "webp" in out.lower()
+        except Exception as e:
+            log.warning(f"[NAV] query webp loader failed: {e}")
+            return False
+
+    def _fast_validate_webp(self, hex_str: str) -> bytes:
+        hex_str = hex_str.strip().replace("0x", "").replace(" ", "").replace("\n", "")
+
+        if not hex_str:
+            raise ValueError("empty hex")
+
+        if len(hex_str) % 2 != 0:
+            raise ValueError("invalid hex length")
+
+        # Max Image 256kB 
+        if len(hex_str) > 256 * 1024 * 2:
+            raise ValueError("hex too large")
+
+        try:
+            raw = bytes.fromhex(hex_str)
+        except Exception:
+            raise ValueError("invalid hex")
+
+        if len(raw) < 12 or raw[:4] != b"RIFF" or raw[8:12] != b"WEBP":
+            raise ValueError("not webp")
+
+        return raw
+
+    def _sanitize_map_filename(self, file_name: str) -> str:
+        name = os.path.basename(file_name.strip())
+        if not name:
+            raise ValueError("empty file name")
+
+        name_no_ext, _ext = os.path.splitext(name)
+        if not name_no_ext:
+            raise ValueError("invalid file name")
+
+        return name_no_ext
+
+    def _save_webp_direct(self, file_name: str, raw: bytes) -> str:
+        base_name = self._sanitize_map_filename(file_name)
+        out_path = os.path.join(self.nav_tmp_dir, f"{base_name}.webp")
+
+        with open(out_path, "wb") as f:
+            f.write(raw)
+
+        return out_path
+
+    def _save_png_from_webp(self, file_name: str, raw: bytes) -> str:
+        if Image is None:
+            raise RuntimeError("Pillow is required for webp->png conversion")
+
+        base_name = self._sanitize_map_filename(file_name)
+        out_path = os.path.join(self.nav_tmp_dir, f"{base_name}.png")
+
+        img = Image.open(io.BytesIO(raw))
+        img.save(out_path, "PNG")
+
+        return out_path
+
+    def _save_webp_or_convert_to_png(self, file_name: str, hex_str: str) -> str:
+        os.makedirs(self.nav_tmp_dir, exist_ok=True)
+
+        raw = self._fast_validate_webp(hex_str)
+
+        if self.webp_supported:
+            log.debug("supported web")
+            return self._save_webp_direct(file_name, raw)
+        log.debug("convert to png")
+        return self._save_png_from_webp(file_name, raw)
 
     def _stop_pipeline(self):
         if self.pipeline:
@@ -317,6 +459,7 @@ class ARNavPlayer:
         self.video_scale = None
         self.caps_filter = None
         self.video_sink = None
+        self.map_overlay = None
 
         self.road_overlay = None
         self.hint_overlay = None

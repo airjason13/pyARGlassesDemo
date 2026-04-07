@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from pathlib import Path
 
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import (
@@ -14,6 +15,8 @@ from PyQt5.QtWidgets import (
     QSpinBox,
     QCheckBox,
     QGroupBox,
+    QFileDialog,
+    QLineEdit,
 )
 
 
@@ -61,6 +64,10 @@ class NsightPage(QWidget):
         self.sim_distance_m = 0
         self.sim_running = False
 
+        # NAV_MAP_IMAGE test state
+        self.map_image_path = ""
+        self.map_image_hex = ""
+
         self.init_ui()
 
     def init_ui(self):
@@ -70,19 +77,17 @@ class NsightPage(QWidget):
         title.setStyleSheet("color: white; font-size: 22px; font-weight: bold;")
         main_layout.addWidget(title)
 
-        # ---------- form ----------
+        # ---------- NAV state form ----------
         cmd_group = QGroupBox("NAV Command Editor")
         form_layout = QFormLayout()
 
         self.combo_direction = QComboBox()
         self.combo_direction.addItems(self.direction_options)
-        self.combo_direction.currentTextChanged.connect(self.update_preview)
         form_layout.addRow("Direction", self.combo_direction)
 
         self.combo_road_name = QComboBox()
         self.combo_road_name.setEditable(True)
         self.combo_road_name.addItems(self.road_options)
-        self.combo_road_name.currentTextChanged.connect(self.update_preview)
         form_layout.addRow("Road Name", self.combo_road_name)
 
         self.combo_arrived_road_name = QComboBox()
@@ -95,7 +100,6 @@ class NsightPage(QWidget):
         self.spin_distance_m.setSingleStep(50)
         self.spin_distance_m.setSuffix(" m")
         self.spin_distance_m.setValue(500)
-        self.spin_distance_m.valueChanged.connect(self.update_preview)
         form_layout.addRow("Distance", self.spin_distance_m)
 
         self.spin_interval_ms = QSpinBox()
@@ -119,21 +123,50 @@ class NsightPage(QWidget):
         cmd_group.setLayout(form_layout)
         main_layout.addWidget(cmd_group)
 
-        # ---------- command preview ----------
-        preview_group = QGroupBox("Command Preview")
-        preview_layout = QVBoxLayout()
+        # ---------- NAV MAP IMAGE form ----------
+        map_group = QGroupBox("NAV_MAP_IMAGE Tester")
+        map_layout = QFormLayout()
 
-        self.text_preview = QTextEdit()
-        self.text_preview.setReadOnly(True)
-        preview_layout.addWidget(self.text_preview)
+        self.label_map_file_name = QLabel("ex: live_map_001")
+        self.label_map_file_name.setStyleSheet("""
+            QLabel {
+                background-color: #333;
+                color: #aaa;
+                border: 1px solid #555;
+                padding: 3px;
+            }
+        """)
+        self.label_map_file_name.setWordWrap(True)
+        map_layout.addRow("Map File Name", self.label_map_file_name)
 
-        preview_group.setLayout(preview_layout)
-        main_layout.addWidget(preview_group)
 
-        # ---------- buttons ----------
-        btn_row_1 = QHBoxLayout()
-        main_layout.addLayout(btn_row_1)
+        self.label_map_path = QLabel("No image selected")
+        self.label_map_path.setWordWrap(True)
+        map_layout.addRow("Selected Image", self.label_map_path)
 
+        self.label_map_hex_info = QLabel("HEX bytes: 0")
+        map_layout.addRow("HEX Info", self.label_map_hex_info)
+
+        map_btn_row = QHBoxLayout()
+
+        self.btn_browse_map = QPushButton("上傳地圖")
+        self.btn_browse_map.clicked.connect(self.on_browse_map_image)
+        map_btn_row.addWidget(self.btn_browse_map)
+
+        self.btn_send_map = QPushButton("發送地圖")
+        self.btn_send_map.clicked.connect(self.on_send_nav_map_image)
+        map_btn_row.addWidget(self.btn_send_map)
+
+        self.btn_clear_map = QPushButton("清除地圖")
+        self.btn_clear_map.clicked.connect(self.on_clear_nav_map_image)
+        map_btn_row.addWidget(self.btn_clear_map)
+
+        map_layout.addRow("", map_btn_row)
+
+        map_group.setLayout(map_layout)
+        main_layout.addWidget(map_group)
+
+        # ---------- nav buttons ----------
         btn_row_2 = QHBoxLayout()
 
         self.btn_start_nav = QPushButton("啟動導航")
@@ -199,9 +232,10 @@ class NsightPage(QWidget):
                         color: #00FF00;
                         border: 1px solid #444;
                     }
+                    QLabel {
+                        color: white;
+                    }
                 """)
-        self.update_preview()
-
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -238,6 +272,7 @@ class NsightPage(QWidget):
         direction: str | None = None,
         road_name: str | None = None,
     ) -> str:
+
         payload = self._build_nav_state_payload(
             distance_m=distance_m,
             direction=direction,
@@ -252,6 +287,38 @@ class NsightPage(QWidget):
     def _build_nav_stop_command(self) -> str:
         return "cmd:demo_set_nav_stop;data:{};src:mobile;dst:demo"
 
+    def _build_nav_map_image_payload(self) -> dict:
+        file_name = self.map_file_name or self._default_map_file_name()
+
+        return {
+            "file_name": file_name,
+            "hex": self.map_image_hex,
+        }
+
+    def _build_nav_map_image_command(self) -> str:
+        payload = self._build_nav_map_image_payload()
+        return (
+            "cmd:demo_set_nav_map_image;"
+            f"data:{json.dumps(payload, ensure_ascii=False)};"
+            "src:mobile;dst:demo"
+        )
+
+    def _build_nav_map_image_clear_command(self) -> str:
+        payload = {
+            "file_name": "",
+            "hex": "",
+        }
+        return (
+            "cmd:demo_set_nav_map_image;"
+            f"data:{json.dumps(payload, ensure_ascii=False)};"
+            "src:mobile;dst:demo"
+        )
+
+    def _default_map_file_name(self) -> str:
+        if self.map_image_path:
+            return Path(self.map_image_path).stem
+        return "nav_map_test"
+
     def _push_command(self, cmd: str):
         self.main_window.cmd_parser.parse_cmds(cmd)
         self._append_output(cmd)
@@ -260,31 +327,57 @@ class NsightPage(QWidget):
         now = datetime.now().strftime("%H:%M:%S")
         self.text_output.append(f"[{now}] {cmd}")
 
-    def update_preview(self):
-        cmd = self._build_nav_state_command()
-        self.text_preview.setPlainText(cmd)
+    def _file_to_hex(self, file_path: str) -> str:
+        with open(file_path, "rb") as f:
+            return f.read().hex()
 
-    # ------------------------------------------------------------------
-    # Single shot actions
-    # ------------------------------------------------------------------
-    def on_set_nav_command(self):
-        cmd = self._build_nav_state_command()
-        self._push_command(cmd)
+    def _set_map_file_ui(self, file_path: str, hex_str: str):
+        self.map_image_path = file_path
+        self.map_image_hex = hex_str
 
-    def on_send_arrived(self):
-        cmd = self._build_nav_state_command(
-            distance_m=0,
-            direction="arrived",
-            road_name=self._current_arrived_road_name(),
+        # Set file name state
+        self.map_file_name = Path(file_path).stem if file_path else ""
+
+        # UI
+        self.label_map_file_name.setText(self.map_file_name or "ex: live_map_001")
+        self.label_map_path.setText(file_path if file_path else "No image selected")
+        self.label_map_hex_info.setText(f"HEX bytes: {len(hex_str) // 2}")
+    # ------------------------------------------------------------------
+    # NAV MAP IMAGE actions
+    # ------------------------------------------------------------------
+    def on_browse_map_image(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "選擇導航圖片",
+            "",
+            "Image Files (*.webp *.png *.jpg *.jpeg *.bmp);;All Files (*)"
         )
+        if not file_path:
+            return
+
+        try:
+            hex_str = self._file_to_hex(file_path)
+            self._set_map_file_ui(file_path, hex_str)
+            self._append_output(f"[LOAD_MAP_IMAGE] {file_path} -> hex length={len(hex_str)}")
+        except Exception as e:
+            self._append_output(f"[LOAD_MAP_IMAGE][ERROR] {e}")
+
+    def on_send_nav_map_image(self):
+        if not self.map_image_hex:
+            self._append_output("[NAV_MAP_IMAGE] no image loaded")
+            return
+
+        cmd = self._build_nav_map_image_command()
         self._push_command(cmd)
 
-    def on_send_nav_stop(self):
-        cmd = self._build_nav_stop_command()
-        self._push_command(cmd)
+    def on_clear_nav_map_image(self):
+        # self.map_image_path = ""
+        # self.map_image_hex = ""
+        # self.label_map_path.setText("No image selected")
+        # self.label_map_hex_info.setText("HEX bytes: 0")
 
-    def on_clear_output(self):
-        self.text_output.clear()
+        cmd = self._build_nav_map_image_clear_command()
+        self._push_command(cmd)
 
     # ------------------------------------------------------------------
     # Simulation controls
@@ -298,7 +391,6 @@ class NsightPage(QWidget):
 
         cmd = self._build_nav_state_command(distance_m=self.sim_distance_m)
         self._push_command(cmd)
-
 
     def on_stop_nav(self):
         self.sim_running = False

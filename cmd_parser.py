@@ -2,7 +2,7 @@ from global_def import *
 from mediaengine.media_engine_def import PlayStatus_Dict
 from mediaengine.mediaengine import MediaEngine
 from navengine.nav_def import SUPPORTED_NAV_DIRECTIONS
-from navengine.nav_player import ARNavPlayer
+from navengine.nav_controller import ARNavPlayer
 from utils.file_utils import *
 
 from PyQt5.QtCore import QObject, pyqtSignal
@@ -430,6 +430,28 @@ class CmdParser(QObject):
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 
+    def demo_set_nav_map_image(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+
+        try:
+            payload = json.loads(data.get("data", "{}"))
+
+            # file_name = payload.get("file_name", "")
+            # file_name = "map_image"
+            hex_data = payload.get("hex", "")
+
+            self.nav_player.set_nav_map_image(hex_str = hex_data)
+
+            result = {"status": "OK"}
+
+        except Exception as e:
+            log.error(f"demo_set_nav_map_image error: {e}")
+            result = {"status": "NG", "error": str(e)}
+
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+
     cmd_function_map = {
         DEMO_GET_SW_VERSION: demo_get_sw_version,
         DEMO_GET_MEDIAFILE_FILE_LIST: demo_get_mediafile_file_list,
@@ -475,6 +497,7 @@ class CmdParser(QObject):
 
         DEMO_SET_NAV_STATE:demo_set_nav_state,
         DEMO_SET_NAV_STOP:demo_set_nav_stop,
+        DEMO_SET_NAV_MAP_IMAGE:demo_set_nav_map_image,
     }
 
     ''''''
