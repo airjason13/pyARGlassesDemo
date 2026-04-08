@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QApplicat
 from PyQt5.QtCore import Qt, QTimer
 
 from mediaengine.mediaengine import MediaEngine
-from navengine.nav_controller import ARNavPlayer
+from navengine.nav_player import ARNavPlayer
 
 from unix_server import UnixServer
 from unix_client import UnixClient

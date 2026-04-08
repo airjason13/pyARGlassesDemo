@@ -26,14 +26,14 @@ ASSET_MAP = {
 }
 
 NAV_HINT_TEXT_MAP = {
-    "straight": "直行",
-    "turn_left": "左轉",
-    "turn_right": "右轉",
-    "turn_slight_left": "微靠左",
-    "turn_slight_right": "微靠右",
-    "roundabout_enter": "◎ 進入圓環",
-    "roundabout_exit": "駛出圓環",
-    "uturn_left": "左迴轉",
-    "uturn_right": "右迴轉",
-    "arrived": "ꚰ 抵達目的地",
+    "straight": "↑ Go straight",
+    "turn_left": "← Turn left",
+    "turn_right": "→ Turn right",
+    "turn_slight_left": "↖ Slight left",
+    "turn_slight_right": "↗ Slight right",
+    "roundabout_enter": "○ Enter roundabout",
+    "roundabout_exit": "↑ Exit roundabout",
+    "uturn_left": "↺ Make a U-turn (left)",
+    "uturn_right": "↻ Make a U-turn (right)",
+    "arrived": "◉ You have arrived",
 }

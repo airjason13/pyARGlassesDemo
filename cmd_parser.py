@@ -2,7 +2,7 @@ from global_def import *
 from mediaengine.media_engine_def import PlayStatus_Dict
 from mediaengine.mediaengine import MediaEngine
 from navengine.nav_def import SUPPORTED_NAV_DIRECTIONS
-from navengine.nav_controller import ARNavPlayer
+from navengine.nav_player import ARNavPlayer
 from utils.file_utils import *
 
 from PyQt5.QtCore import QObject, pyqtSignal

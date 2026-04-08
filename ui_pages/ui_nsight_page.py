@@ -43,6 +43,11 @@ class NsightPage(QWidget):
         ]
 
         self.road_options = [
+            "Zhongxiao East Rd",
+            "Zhongshan Rd",
+            "Minsheng East Rd",
+            "Renai Rd",
+            "Xinyi Rd",
             "忠孝東路",
             "中山路",
             "民生東路",
@@ -52,6 +57,9 @@ class NsightPage(QWidget):
         ]
 
         self.arrived_road_options = [
+            "Taipei 101",
+            "Taipei Main Station",
+            "Taipei Bus Station",
             "台北 101",
             "台北車站",
             "市府轉運站",
@@ -60,6 +68,9 @@ class NsightPage(QWidget):
 
         self.nav_timer = QTimer(self)
         self.nav_timer.timeout.connect(self._on_nav_timer_timeout)
+
+        self.map_timer = QTimer(self)
+        self.map_timer.timeout.connect(self._on_map_timer_timeout)
 
         self.sim_distance_m = 0
         self.sim_running = False
@@ -147,17 +158,22 @@ class NsightPage(QWidget):
         self.label_map_hex_info = QLabel("HEX bytes: 0")
         map_layout.addRow("HEX Info", self.label_map_hex_info)
 
+        self.check_auto_send_map = QCheckBox("Auto send map every 1 second")
+        self.check_auto_send_map.setChecked(False)
+        self.check_auto_send_map.toggled.connect(self.on_toggle_auto_send_map)
+        map_layout.addRow("", self.check_auto_send_map)
+
         map_btn_row = QHBoxLayout()
 
-        self.btn_browse_map = QPushButton("上傳地圖")
+        self.btn_browse_map = QPushButton("Upload Map")
         self.btn_browse_map.clicked.connect(self.on_browse_map_image)
         map_btn_row.addWidget(self.btn_browse_map)
 
-        self.btn_send_map = QPushButton("發送地圖")
+        self.btn_send_map = QPushButton("Send Map")
         self.btn_send_map.clicked.connect(self.on_send_nav_map_image)
         map_btn_row.addWidget(self.btn_send_map)
 
-        self.btn_clear_map = QPushButton("清除地圖")
+        self.btn_clear_map = QPushButton("Clear Map")
         self.btn_clear_map.clicked.connect(self.on_clear_nav_map_image)
         map_btn_row.addWidget(self.btn_clear_map)
 
@@ -169,11 +185,11 @@ class NsightPage(QWidget):
         # ---------- nav buttons ----------
         btn_row_2 = QHBoxLayout()
 
-        self.btn_start_nav = QPushButton("啟動導航")
+        self.btn_start_nav = QPushButton("Start Navigation")
         self.btn_start_nav.clicked.connect(self.on_start_nav)
         btn_row_2.addWidget(self.btn_start_nav)
 
-        self.btn_stop_nav = QPushButton("取消導航")
+        self.btn_stop_nav = QPushButton("Stop Navigation")
         self.btn_stop_nav.clicked.connect(self.on_stop_nav)
         btn_row_2.addWidget(self.btn_stop_nav)
 
@@ -235,17 +251,28 @@ class NsightPage(QWidget):
                     QLabel {
                         color: white;
                     }
+                    QCheckBox::indicator {
+                        width: 14px;
+                        height: 14px;
+                        background-color: #2a2a2a;
+                        border: 1px solid #666;
+                    }
+                    
+                    QCheckBox::indicator:checked {
+                        background-color: #888;
+                        border: 2px solid #ffffff;
+                    }
                 """)
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
     def _current_road_name(self) -> str:
         text = self.combo_road_name.currentText().strip()
-        return text if text else "測試道路"
+        return text if text else ""
 
     def _current_arrived_road_name(self) -> str:
         text = self.combo_arrived_road_name.currentText().strip()
-        return text if text else "目的地"
+        return text if text else "Destination"
 
     def _build_nav_state_payload(
         self,
@@ -348,7 +375,7 @@ class NsightPage(QWidget):
     def on_browse_map_image(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "選擇導航圖片",
+            "Select Navigation Image",
             "",
             "Image Files (*.webp *.png *.jpg *.jpeg *.bmp);;All Files (*)"
         )
@@ -361,6 +388,25 @@ class NsightPage(QWidget):
             self._append_output(f"[LOAD_MAP_IMAGE] {file_path} -> hex length={len(hex_str)}")
         except Exception as e:
             self._append_output(f"[LOAD_MAP_IMAGE][ERROR] {e}")
+
+    def on_toggle_auto_send_map(self, checked: bool):
+        if checked:
+            self.map_timer.start(1000)
+            self._append_output("[NAV_MAP_IMAGE] auto send enabled (1000 ms)")
+        else:
+            self.map_timer.stop()
+            self._append_output("[NAV_MAP_IMAGE] auto send disabled")
+
+    def _on_map_timer_timeout(self):
+        if not self.check_auto_send_map.isChecked():
+            return
+
+        if not self.map_image_hex:
+            self._append_output("[NAV_MAP_IMAGE] auto send skipped: no image loaded")
+            return
+
+        cmd = self._build_nav_map_image_command()
+        self._push_command(cmd)
 
     def on_send_nav_map_image(self):
         if not self.map_image_hex:
@@ -375,6 +421,8 @@ class NsightPage(QWidget):
         # self.map_image_hex = ""
         # self.label_map_path.setText("No image selected")
         # self.label_map_hex_info.setText("HEX bytes: 0")
+        if self.check_auto_send_map.isChecked():
+            self.check_auto_send_map.setChecked(False)
 
         cmd = self._build_nav_map_image_clear_command()
         self._push_command(cmd)

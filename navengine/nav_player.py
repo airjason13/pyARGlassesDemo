@@ -281,7 +281,7 @@ class ARNavPlayer:
         msg_type = message.type
 
         if msg_type == Gst.MessageType.EOS:
-            log.info(f"[NAV] EOS -> loop current video, direction={self.direction}")
+            # log.info(f"[NAV] EOS -> loop current video, direction={self.direction}")
             if self.pipeline:
                 self.pipeline.seek_simple(
                     Gst.Format.TIME,
@@ -436,9 +436,10 @@ class ARNavPlayer:
 
         raw = self._fast_validate_webp(hex_str)
 
-        if self.webp_supported:
-            log.debug("supported web")
-            return self._save_webp_direct(file_name, raw)
+        if self.webp_supported: # i.MX93 supported gdkpixbuf decode
+             log.debug("supported web")
+             return self._save_webp_direct(file_name, raw)
+
         log.debug("convert to png")
         return self._save_png_from_webp(file_name, raw)
 
