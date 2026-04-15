@@ -433,7 +433,11 @@ class CmdParser(QObject):
     def demo_set_nav_map_image(self, data: dict):
         data['src'], data['dst'] = data['dst'], data['src']
 
+        # raw = data.get("data", "")
+        # log.debug("[CmdParser] len(data_field)=%d tail=%r endswith=%s",
+        #           len(raw), raw[-80:], raw.endswith('"}'))
         try:
+
             payload = json.loads(data.get("data", "{}"))
 
             # file_name = payload.get("file_name", "")

@@ -66,15 +66,19 @@ class CMainWindow(QMainWindow):
 
         self.media_engine.set_nav_player(self.nav_player)
         self.nav_player.set_media_engine(self.media_engine)
-
+        # Accept connections from the message server
         self.unix_server = UnixServer(UNIX_DEMO_APP_SERVER_URI)
         self.unix_server.unix_data_received.connect(self.unix_data_received_handler)
+        # Connect to the message server
         self.msg_app_unix_client = UnixClient(path=UNIX_MSG_SERVER_URI)
 
         self.cmd_parser = CmdParser(self.msg_app_unix_client,
                                     self.media_engine,
                                     self.nav_player,
                                     )
+        # Send to message server
+        self.cmd_parser.unix_data_ready_to_send.connect(self.send_to_msg_server)
+
 
     def test_timer(self):
         pass
@@ -113,6 +117,7 @@ class CMainWindow(QMainWindow):
 
     def unix_data_received_handler(self, msg:str):
         log.debug("msg: %s", msg)
+        log.debug("[MainWindow] len(msg)=%d tail=%r", len(msg), msg[-80:])
         # print recv cmd on Eng page
         if self.TEST_FLAG is True:
             for i in range(len(self.page_list)):

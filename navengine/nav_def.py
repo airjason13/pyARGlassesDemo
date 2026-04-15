@@ -9,7 +9,7 @@ SUPPORTED_NAV_DIRECTIONS = {
     "roundabout_exit",
     "uturn_left",
     "uturn_right",
-    "arrived",
+    "arrival",
 }
 
 ASSET_MAP = {
@@ -22,7 +22,7 @@ ASSET_MAP = {
     "roundabout_exit": "straight.mp4",
     "uturn_left": "uturn.mp4",
     "uturn_right": "uturn.mp4",
-    "arrived": "arrival.mp4",
+    "arrival": "arrival.mp4",
 }
 
 NAV_HINT_TEXT_MAP = {
@@ -35,5 +35,5 @@ NAV_HINT_TEXT_MAP = {
     "roundabout_exit": "↑ Exit roundabout",
     "uturn_left": "↺ Make a U-turn (left)",
     "uturn_right": "↻ Make a U-turn (right)",
-    "arrived": "◉ You have arrived",
+    "arrival": "◉ You have arrived",
 }
