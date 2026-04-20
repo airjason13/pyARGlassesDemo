@@ -50,6 +50,7 @@ class ARNavPlayer:
         self.nav_window_height = 480
 
         self.bus = None
+        self.nav_active = False
 
         log.info(f"[NAV] gdk-pixbuf webp support: {self.webp_supported}")
 
@@ -295,7 +296,9 @@ class ARNavPlayer:
             self._stop_pipeline()
 
     def set_nav_state(self, direction: str, road_name: str, distance_m: int):
-        self._stop_media_if_running()
+        if not self.nav_active:
+            self._stop_media_if_running()
+            self.nav_active = True
 
         if direction not in SUPPORTED_NAV_DIRECTIONS:
             raise ValueError(f"Invalid direction: {direction}")
@@ -356,7 +359,7 @@ class ARNavPlayer:
             if self.map_overlay:
                 try:
                     # Hide → Output Map → Show
-                    self.map_overlay.set_property("alpha", 0.0)
+                    # self.map_overlay.set_property("alpha", 0.0)
                     self.map_overlay.set_property("location", out_path)
                     self.map_overlay.set_property("alpha", 1.0)
                 except Exception as e:
@@ -444,6 +447,8 @@ class ARNavPlayer:
         return self._save_png_from_webp(file_name, raw)
 
     def _stop_pipeline(self):
+        self.nav_active = False
+
         if self.pipeline:
             try:
                 if self.bus:

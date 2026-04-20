@@ -29,6 +29,7 @@ class NsightPage(QWidget):
         self.central_widget = _central_qwidget
         self.media_engine = media_engine
 
+
         self.direction_options = [
             "straight",
             "turn_left",
@@ -39,7 +40,7 @@ class NsightPage(QWidget):
             "roundabout_exit",
             "uturn_left",
             "uturn_right",
-            "arrived",
+            "arrival",
         ]
 
         self.road_options = [
@@ -78,6 +79,9 @@ class NsightPage(QWidget):
         # NAV_MAP_IMAGE test state
         self.map_image_path = ""
         self.map_image_hex = ""
+        self.map_file_name = ""
+
+        self.auto_restart_nav_pending = False
 
         self.init_ui()
 
@@ -127,9 +131,20 @@ class NsightPage(QWidget):
         self.spin_step_m.setValue(50)
         form_layout.addRow("Step Distance", self.spin_step_m)
 
+        self.spin_restart_delay_ms = QSpinBox()
+        self.spin_restart_delay_ms.setRange(0, 10000)
+        self.spin_restart_delay_ms.setSingleStep(100)
+        self.spin_restart_delay_ms.setSuffix(" ms")
+        self.spin_restart_delay_ms.setValue(1000)
+        form_layout.addRow("Restart Delay", self.spin_restart_delay_ms)
+
         self.check_auto_arrived = QCheckBox("Auto send arrived when distance reaches 0")
         self.check_auto_arrived.setChecked(True)
         form_layout.addRow("", self.check_auto_arrived)
+
+        self.check_auto_restart_nav = QCheckBox("Auto re-execute NAV Command after arrival")
+        self.check_auto_restart_nav.setChecked(False)
+        form_layout.addRow("", self.check_auto_restart_nav)
 
         cmd_group.setLayout(form_layout)
         main_layout.addWidget(cmd_group)
@@ -369,6 +384,16 @@ class NsightPage(QWidget):
         self.label_map_file_name.setText(self.map_file_name or "ex: live_map_001")
         self.label_map_path.setText(file_path if file_path else "No image selected")
         self.label_map_hex_info.setText(f"HEX bytes: {len(hex_str) // 2}")
+
+    def _restart_nav(self):
+        self.sim_distance_m = self.spin_distance_m.value()
+        self.sim_running = True
+
+        interval_ms = self.spin_interval_ms.value()
+        self.nav_timer.start(interval_ms)
+
+        cmd = self._build_nav_state_command(distance_m=self.sim_distance_m)
+        self._push_command(cmd)
     # ------------------------------------------------------------------
     # NAV MAP IMAGE actions
     # ------------------------------------------------------------------
@@ -431,14 +456,7 @@ class NsightPage(QWidget):
     # Simulation controls
     # ------------------------------------------------------------------
     def on_start_nav(self):
-        self.sim_distance_m = self.spin_distance_m.value()
-        self.sim_running = True
-
-        interval_ms = self.spin_interval_ms.value()
-        self.nav_timer.start(interval_ms)
-
-        cmd = self._build_nav_state_command(distance_m=self.sim_distance_m)
-        self._push_command(cmd)
+        self._restart_nav()
 
     def on_stop_nav(self):
         self.sim_running = False
@@ -458,12 +476,22 @@ class NsightPage(QWidget):
         if self.sim_distance_m == 0 and self.check_auto_arrived.isChecked():
             cmd = self._build_nav_state_command(
                 distance_m=0,
-                direction="arrived",
+                direction="arrival",
                 road_name=self._current_arrived_road_name(),
             )
             self._push_command(cmd)
             self.sim_running = False
             self.nav_timer.stop()
+
+            if self.check_auto_restart_nav.isChecked():
+                # self._append_output("[NAV] auto re-execute enabled, restarting navigation")
+                # self._restart_nav()
+                # QTimer.singleShot(1000, self._restart_nav)
+                delay = self.spin_restart_delay_ms.value()
+                if delay <= 0:
+                    delay = 1
+                self._append_output(f"[NAV] auto re-execute after {delay} ms")
+                QTimer.singleShot(delay, self._restart_nav)
             return
 
         cmd = self._build_nav_state_command(distance_m=self.sim_distance_m)
