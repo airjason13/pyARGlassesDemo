@@ -33,7 +33,7 @@ NAV_HINT_TEXT_MAP = {
     "turn_slight_right": "↗ Slight right",
     "roundabout_enter": "○ Enter roundabout",
     "roundabout_exit": "↑ Exit roundabout",
-    "uturn_left": "↺ Make a U-turn (left)",
-    "uturn_right": "↻ Make a U-turn (right)",
-    "arrival": "◉ You have arrived",
+    "uturn_left": "↺ U-turn (left)",
+    "uturn_right": "↻ U-turn (right)",
+    "arrival": "◉ Arrived",
 }

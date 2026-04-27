@@ -54,7 +54,8 @@ class NsightPage(QWidget):
             "民生東路",
             "仁愛路",
             "信義路",
-            "測試道路",
+            "在第一個十字路口向左轉，行駛科中路",
+            "在第一個十字路口向右轉，\n行駛中華路",
         ]
 
         self.arrived_road_options = [
