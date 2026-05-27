@@ -274,14 +274,25 @@ class MediaEngine(QObject):
 
         abs_path = os.path.abspath(file_uri)
         if file_ext == ".mp4":
-            gst_cmd = f"{shlex.quote(abs_path)}"
-            self._play_single_file_worker_with_cmd(gst_cmd, auto_kill_after=None)
+            gst_cmd = abs_path
+            self._play_single_file_worker_with_cmd(
+                gst_cmd,
+                auto_kill_after=None
+            )
+
         elif file_ext in ['.jpg', '.jpeg', '.png', '.webp']:
-            gst_cmd = f"{shlex.quote(abs_path)}"
-            self._play_single_file_worker_with_cmd(gst_cmd, auto_kill_after=self.still_image_play_period)
+            gst_cmd = abs_path
+            self._play_single_file_worker_with_cmd(
+                gst_cmd,
+                auto_kill_after=self.still_image_play_period
+            )
+
         elif file_ext == '.txt':
-            gst_cmd = f"{shlex.quote(abs_path)}"
-            self._render_subtitle_worker_with_cmd(gst_cmd, auto_kill_after=None)
+            gst_cmd = abs_path
+            self._render_subtitle_worker_with_cmd(
+                gst_cmd,
+                auto_kill_after=None
+            )
 
     def stop_single_file_play(self):
         log.debug("stop_play")

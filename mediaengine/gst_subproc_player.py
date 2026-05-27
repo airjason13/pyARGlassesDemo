@@ -68,19 +68,26 @@ class GstSingleFileWorker(QObject):
         log.debug("create_pipeline")
 
         p = pathlib.Path(self.cmd_args)
-        file_path = shlex.quote(self.cmd_args)
-        has_audio = self.has_audio_stream(file_path)
+        file_path = self.cmd_args
+
         # ---------------------------
         # 1. MP4 → Video + Audio
         # ---------------------------
         if p.suffix.lower() == ".mp4":
+
+            has_audio = self.has_audio_stream(file_path)
 
             if platform.machine() == "x86_64":
                 video_sink = "autovideosink"
                 audio_sink = "autoaudiosink"
                 video_convert = "videoconvert"
             else:
-                video_sink = "waylandsink"
+                video_sink = (
+                    'waylandsink '
+                    'fullscreen=true '
+                    'sync=false '
+                    'name=sink'
+                )
                 # audio_sink = "alsasink device=hw:1,0"
                 audio_sink = "pulsesink"
                 video_convert = "imxvideoconvert_pxp"
@@ -88,32 +95,45 @@ class GstSingleFileWorker(QObject):
             if has_audio:
                 self.setup_audio_session()
                 str_pipeline = (
-                    f"filesrc location={shlex.quote(file_path)} ! decodebin name=d "
-                    f"d. ! queue ! {video_convert} ! {video_sink} "
-                    f"d. ! queue ! audioconvert ! audioresample ! "
-                    f"volume name=vol ! {audio_sink} "
+                    f'filesrc location="{file_path}" ! decodebin name=d '
+                    f'd. ! queue ! {video_convert} ! {video_sink} '
+                    f'd. ! queue ! audioconvert ! audioresample ! '
+                    f'volume name=vol ! {audio_sink} '
                 )
             else:
                 str_pipeline = (
-                    f"filesrc location={shlex.quote(file_path)} ! "
-                    f"decodebin ! videoconvert ! {video_sink}"
+                    f'filesrc location="{file_path}" ! '
+                    f'decodebin ! {video_convert} ! {video_sink}'
                 )
 
         # ---------------------------
         # 2. Image（JPG / PNG / WEBP）
         # ---------------------------
-        else:
+        elif p.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
+
+            if platform.machine() == "x86_64":
+                video_sink = "autovideosink"
+                video_convert = "videoconvert"
+            else:
+                video_sink = (
+                    'waylandsink '
+                    'fullscreen=true '
+                    'sync=false '
+                    'name=sink'
+                )
+                video_convert = "imxvideoconvert_pxp"
+
             str_pipeline = (
-                f"multifilesrc location={file_path} ! decodebin ! "
-                "imagefreeze ! videoconvert ! video/x-raw ! autovideosink"
+                f'multifilesrc location="{file_path}" ! decodebin ! '
+                f'imagefreeze ! {video_convert} ! video/x-raw ! {video_sink}'
             )
 
-        # Log pipeline for debugging
+        else:
+            log.error(f"Unsupported media type: {p.suffix}")
+            return None
+
         log.debug(f"pipeline: {str_pipeline}")
 
-        # ---------------------------
-        # 3. Pipeline launch
-        # ---------------------------
         try:
             pipeline = Gst.parse_launch(str_pipeline)
             return pipeline
@@ -220,7 +240,7 @@ class GstSingleFileWorker(QObject):
             self.pipeline.set_state(Gst.State.PLAYING)
 
 
-
+'''
 class GstSingleFileWorker_PRE(QObject):
     gst_single_file_play_proc_finished = pyqtSignal(bool, str)  # success, reason
     gst_single_file_play_proc_started = pyqtSignal()
@@ -238,7 +258,7 @@ class GstSingleFileWorker_PRE(QObject):
         self._proc = None
         self._killed_by_timer = False
 
-        ''' gst paras'''
+        # gst paras
         self.pipeline = None
         self.loop = None
         self.running = False
@@ -273,11 +293,11 @@ class GstSingleFileWorker_PRE(QObject):
             else:
                 str_pipeline = \
                     f"filesrc location={shlex.quote(self.cmd_args)} ! decodebin ! videoconvert ! waylandsink"
-                '''str_pipeline = (
+                """str_pipeline = (
                     f"filesrc location=\"{shlex.quote(self.cmd_args)}\" ! "
                     "qtdemux name=d "
                     "d.video_0 ! queue ! h264parse ! avdec_h264 max-threads=2 ! queue ! videoconvert ! waylandsink sync=false name=sink "
-                )'''
+                )"""
         elif p.suffix in [".jpg", ".jpeg", ".png", ".webp"]:
 
             if platform.machine() == 'x86_64':
@@ -402,4 +422,5 @@ class GstSingleFileWorker_PRE(QObject):
         if self.pipeline:
             self.pipeline.set_state(Gst.State.PLAYING)
             self.gst_single_file_play_proc_status.emit(PlayStatus.PLAYING)
+'''
 
