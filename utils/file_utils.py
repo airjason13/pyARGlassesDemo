@@ -115,6 +115,10 @@ def get_persist_config_int(persist_filename: str, def_value: int) -> int :
     if not target_persist_uri.exists():
         with open(target_persist_uri, 'w', encoding='utf-8') as f:
             f.write(str(def_value))
+            f.truncate()
+            f.flush()
+            f.close()
+            os.sync()
 
     with open(target_persist_uri, 'r', encoding='utf-8') as f:
         str_value = f.read().strip()
@@ -127,6 +131,10 @@ def get_persist_config_str(persist_filename: str, def_value: str) -> str:
     target_persist_uri = Path(os.path.join(PERSIST_CONFIG_URI_PATH, persist_filename))
     with open(target_persist_uri, 'w', encoding='utf-8') as f:
         f.write(str(def_value))
+        f.truncate()
+        f.flush()
+        f.close()
+        os.sync()
 
     with open(target_persist_uri, 'r', encoding='utf-8') as f:
         str_value = f.read().strip()
@@ -138,6 +146,10 @@ def set_persist_config_int(persist_filename: str, def_value: int) -> None:
     target_persist_uri = Path(os.path.join(PERSIST_CONFIG_URI_PATH, persist_filename))
     with open(target_persist_uri, 'w', encoding='utf-8') as f:
         f.write(str(def_value))
+        f.truncate()
+        f.flush()
+        f.close()
+        os.sync()
 
 def set_persist_config_str(persist_filename: str, def_value: str) -> None:
     path_persist_folder = Path(PERSIST_CONFIG_URI_PATH)
@@ -145,6 +157,10 @@ def set_persist_config_str(persist_filename: str, def_value: str) -> None:
     target_persist_uri = Path(os.path.join(PERSIST_CONFIG_URI_PATH, persist_filename))
     with open(target_persist_uri, 'w', encoding='utf-8') as f:
         f.write(def_value)
+        f.truncate()
+        f.flush()
+        f.close()
+        os.sync()
 
 
 def get_persist_config_float(persist_filename: str, def_value: float) -> float:
@@ -155,6 +171,10 @@ def get_persist_config_float(persist_filename: str, def_value: float) -> float:
     if not target_persist_uri.exists():
         with open(target_persist_uri, 'w', encoding='utf-8') as f:
             f.write(str(def_value))
+            f.truncate()
+            f.flush()
+            f.close()
+            os.sync()
 
     try:
         with open(target_persist_uri, 'r', encoding='utf-8') as f:
@@ -170,6 +190,10 @@ def set_persist_config_float(persist_filename: str, value: float) -> None:
 
     with open(target_persist_uri, 'w', encoding='utf-8') as f:
         f.write(str(value))
+        f.truncate()
+        f.flush()
+        f.close()
+        os.sync()
 
 # 範例：
 if __name__ == "__main__":
