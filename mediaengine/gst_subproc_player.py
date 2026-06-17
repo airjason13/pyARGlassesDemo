@@ -122,10 +122,10 @@ class GstSingleFileWorker(QObject):
                     'sync=false '
                     'name=sink'
                 )
-                video_convert = "imxvideoconvert_pxp"
+                video_convert = "videoconvert"
 
             str_pipeline = (
-                f'multifilesrc location="{file_path}" ! decodebin ! '
+                f'filesrc location="{file_path}" ! decodebin ! '
                 f'imagefreeze ! {video_convert} ! video/x-raw ! {video_sink}'
             )
 
