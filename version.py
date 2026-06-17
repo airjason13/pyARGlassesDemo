@@ -2,7 +2,7 @@
 Version_PN = "ARGlassesDemo"
 Version_Year = '2026'
 Version_Month = '06'
-Version_Date = '10'
+Version_Date = '17'
 Version_Major = "01"
 Version_Minor = "00"
 Version_Patch = "00"

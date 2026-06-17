@@ -89,7 +89,8 @@ class GstSingleFileWorker(QObject):
                     'name=sink'
                 )
                 # audio_sink = "alsasink device=hw:1,0"
-                audio_sink = "pulsesink"
+                # audio_sink = "pulsesink"
+                audio_sink = "autoaudiosink"
                 video_convert = "imxvideoconvert_pxp"
 
             if has_audio:
