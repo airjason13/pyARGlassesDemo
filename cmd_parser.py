@@ -64,6 +64,17 @@ class CmdParser(QObject):
         # self.get_file_list_handle_test(data, 65535) # -> ok
         # self.get_file_list_handle_test(data, 64*1024)
 
+    def demo_set_mediafile_remove_file(self, data: dict):
+        data['src'], data['dst'] = data['dst'], data['src']
+
+        result = remove_files(
+            MEDIAFILE_URI_PATH,
+            data.get("data", "")
+        )
+
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ";".join(f"{k}:{v}" for k, v in data.items())
+        self.unix_data_ready_to_send.emit(reply)
 
     def demo_get_snapshots_file_list(self, data:dict):
         self.get_file_list_handle(data, SNAPSHOTS_URI_PATH)
@@ -477,6 +488,8 @@ class CmdParser(QObject):
         DEMO_SET_MEDIAENGINE_SUBTITLE_COLOR: demo_set_mediaengine_subtitle_color,
         DEMO_SET_MEDIAENGINE_SUBTITLE_REPEAT: demo_set_mediaengine_subtitle_repeat,
         DEMO_SET_MEDIAENGINE_SUBTITLE_COLOR_LINES: demo_set_mediaengine_subtitle_color_lines,
+
+        DEMO_SET_MEDIAFILE_REMOVE_FILE: demo_set_mediafile_remove_file,
 
         DEMO_SET_PLAYLIST_CREATE: demo_set_playlist_create,
         DEMO_SET_PLAYLIST_SELECT: demo_set_playlist_select,

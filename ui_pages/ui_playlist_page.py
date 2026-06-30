@@ -14,6 +14,8 @@ class PlaylistPage(QWidget):
     def __init__(self, _main_window, _central_qwidget, media_engine, **kwargs):
         super(PlaylistPage, self).__init__(**kwargs)
 
+        self.btn_remove_mediafile = None
+        self.btn_get_mediafile_list = None
         self.btn_vol_up = None
         self.btn_vol_down = None
         self.label_volume = None
@@ -132,7 +134,7 @@ class PlaylistPage(QWidget):
         layout.addWidget(make_separator())
 
         # --- Section 3: Information & Tools ---
-        section3 = QLabel("📋 Playlist Info & Tools")
+        section3 = QLabel("📋 Playlist Info & File Tools")
         section3.setStyleSheet("color: lightpink; font-weight: bold; font-size: 16px;")
         layout.addWidget(section3)
 
@@ -143,6 +145,16 @@ class PlaylistPage(QWidget):
         layout.addLayout(make_row(self.btn_get_all, self.btn_get_list,
                                   self.btn_get_current_playing_item, self.btn_remove_playlist))
 
+        self.btn_get_mediafile_list = QPushButton("📁 Get Media Files\n取得媒體檔案")
+        self.btn_remove_mediafile = QPushButton("🗑 Remove Media File\n刪除媒體檔案")
+
+        layout.addLayout(make_row(
+            self.btn_get_mediafile_list,
+            self.btn_remove_mediafile
+        ))
+
+        self.btn_get_mediafile_list.clicked.connect(self.on_get_mediafile_file_list)
+        self.btn_remove_mediafile.clicked.connect(self.on_remove_mediafile)
         # --- Section 4: Volume Control ---
         section_vol = QLabel("🔊 Volume Control")
         section_vol.setStyleSheet("color: lightyellow; font-weight: bold; font-size: 16px;")
@@ -282,6 +294,7 @@ class PlaylistPage(QWidget):
                 color: white;
             }
         """)
+
 
     def _on_cmd_ready_to_send(self, msg):
         self.text_output.setPlainText(msg)
@@ -495,3 +508,26 @@ class PlaylistPage(QWidget):
         new = round(new, 2)
         self.media_engine.set_volume(new)
         self.label_volume.setText(f"{int(new * 100)}%")
+
+    def on_get_mediafile_file_list(self):
+        test_data = {
+            "src": "mobile",
+            "dst": "demo",
+            "data": "{}"
+        }
+        self.main_window.cmd_parser.demo_get_mediafile_file_list(test_data)
+
+    def on_remove_mediafile(self):
+        filename = self.input_name.text().strip()
+
+        if not filename:
+            self.output_result({"status": "NG", "error": "Please enter filename"})
+            return
+
+        test_data = {
+            "src": "mobile",
+            "dst": "demo",
+            "data": filename
+        }
+
+        self.main_window.cmd_parser.demo_set_mediafile_remove_file(test_data)

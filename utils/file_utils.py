@@ -104,6 +104,39 @@ def list_files_by_ext(root_path: str, **kwargs) -> str:
     result = walk_dir(root_path)
     return json.dumps(result, indent=2, ensure_ascii=False)
 
+def remove_files(root_path: str, filenames) -> dict:
+    if isinstance(filenames, str):
+        # Supports multiple files separated by commas.
+        filenames = [x.strip() for x in filenames.split(",") if x.strip()]
+
+    results = []
+
+    for filename in filenames:
+        filename = filename.strip().lstrip("/")
+
+        base = Path(root_path).resolve()
+        target = (base / filename).resolve()
+
+        if base not in target.parents:
+            results.append({"file": filename, "status": "NG", "error": "invalid path"})
+            continue
+
+        if not target.exists():
+            results.append({"file": filename, "status": "NG", "error": "file not found"})
+            continue
+
+        if not target.is_file():
+            results.append({"file": filename, "status": "NG", "error": "not a file"})
+            continue
+
+        target.unlink()
+        results.append({"file": filename, "status": "OK"})
+
+    return {
+        "status": "OK" if all(r["status"] == "OK" for r in results) else "NG",
+        "results": results
+    }
+
 def gen_string(length: int) -> str:
     chars = string.ascii_letters + string.digits  # A-Z, a-z, 0-9
     return ''.join(random.choice(chars) for _ in range(length))
