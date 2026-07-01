@@ -44,3 +44,5 @@ else:
 TEMPORARY_SUBTITLE_URI_PATH = "/tmp/subtitle.txt"
 
 UNIX_SOCKET_BUFFER_SIZE = 8*1024*1024
+
+HAS_AUDIO = False

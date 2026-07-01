@@ -74,8 +74,10 @@ class GstSingleFileWorker(QObject):
         # 1. MP4 → Video + Audio
         # ---------------------------
         if p.suffix.lower() == ".mp4":
-
-            has_audio = self.has_audio_stream(file_path)
+            if HAS_AUDIO:
+                has_audio = self.has_audio_stream(file_path)
+            else:
+                has_audio = False
 
             if platform.machine() == "x86_64":
                 video_sink = "autovideosink"
