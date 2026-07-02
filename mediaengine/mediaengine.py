@@ -30,6 +30,7 @@ class MediaEngine(QObject):
     def __init__(self):
         super(MediaEngine, self).__init__()
         # worker/thread holders
+        self._playlist_missing_count = 0
         self._playlist_index = None
         self._playlist_files = None
         self._current_playlist = None
@@ -367,7 +368,14 @@ class MediaEngine(QObject):
 
             # TX FINISHED
             self.playlist_notify_status(PlayStatus.FINISHED, reason="FILE_NOT_FOUND")
-  
+
+            self._playlist_missing_count += 1
+            
+            if self._playlist_missing_count >= total:
+                log.warning("[Playlist] All files missing.")
+                self.playlist_stop()
+                return
+
             # Move index
             self._playlist_index = (self._playlist_index + direction) % total
 
@@ -450,6 +458,7 @@ class MediaEngine(QObject):
         # Reset playlist status
         self._playlist_files = []
         self._playlist_index = 0
+        self._playlist_missing_count = 0
 
         self.media_engine_status = PlayStatus.IDLE
         self.qsignal_media_play_status_changed.emit(self.media_engine_status)

@@ -1,4 +1,5 @@
 import os, json, glob
+from global_def import *
 
 # PlaylistManager
 class PlaylistManager:
@@ -67,13 +68,30 @@ class PlaylistManager:
         name = name or self.current_list
         if not name:
             return {"status": "NG", "error": "No playlist selected"}
+
         p = self._path(name)
         if not os.path.exists(p):
             return {"status": "NG", "error": f"Playlist '{name}' not found"}
+
         data = self._load(name)
         files = data.get("files", [])
-        indexed_files = [{"index": i, "fpath": f} for i, f in enumerate(files)]
-        return {"status": "OK", "playlist": name, "files": indexed_files}
+
+        indexed_files = []
+        for i, f in enumerate(files):
+            abs_path = os.path.join(MEDIAFILE_URI_PATH, f.lstrip("/"))
+
+            indexed_files.append({
+                "index": i,
+                "fpath": f,
+                "exists": os.path.exists(abs_path)
+            })
+
+        return {
+            "status": "OK",
+            "playlist": name,
+            "files": indexed_files
+        }
+
 
     def remove_item(self, filename: str):
         if not self.current_list:
