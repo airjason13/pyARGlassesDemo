@@ -1,0 +1,15 @@
+crop_size: 7
+gamma: 2.2
+offset_ori:
+  x_max: 519
+  x_min: 120
+  y_max: 389
+  y_min: 90
+offset_proj:
+  x_max: 1005
+  x_min: 526
+  y_max: 750
+  y_min: 397
+scale_size:
+  height: 299
+  width: 399

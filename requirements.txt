@@ -12,3 +12,6 @@ pycparser==2.23
 PyGObject==3.42.2
 typing_extensions==4.15.0
 qasync
+PyYAML
+numpy
+opencv-python-headless

@@ -7,6 +7,7 @@ from PyQt5.QtCore import Qt, QTimer
 
 from mediaengine.mediaengine import MediaEngine
 from navengine.nav_player import ARNavPlayer
+from demura.demura_core import DemuraCore
 
 from unix_server import UnixServer
 from unix_client import UnixClient
@@ -61,11 +62,24 @@ class CMainWindow(QMainWindow):
         signal.signal(signal.SIGINT, self.stop_server)
 
     def _init_core_component(self):
+
+        # Demura
+        self.demura_core = DemuraCore()
+        self.demura_core.initialize()
+        log.debug(self.demura_core.get_gst_properties())
+
+        # Navigation / Media
         self.nav_player = ARNavPlayer()
         self.media_engine = MediaEngine()
 
+        # Shared DemuraCore
+        self.media_engine.set_demura_core(self.demura_core)
+        self.nav_player.set_demura_core(self.demura_core)
+
+        # Media / Navigation cross control
         self.media_engine.set_nav_player(self.nav_player)
         self.nav_player.set_media_engine(self.media_engine)
+
         # Accept connections from the message server
         self.unix_server = UnixServer(UNIX_DEMO_APP_SERVER_URI)
         self.unix_server.unix_data_received.connect(self.unix_data_received_handler)

@@ -44,6 +44,7 @@ class MediaEngine(QObject):
         self.current_volume = 1.0
         self.max_volume_boost = 2.0
         self.nav_player = None
+        self.demura_core = None
 
         self.media_engine_status = PlayStatus.IDLE
 
@@ -66,6 +67,13 @@ class MediaEngine(QObject):
             os.path.join(PERSIST_CONFIG_URI_PATH, PERSIST_VOLUME_CONFIG_FILENAME)
         ])
         self.volume_file_watcher.install_file_changed_slot(self.refresh_volume_changed)
+
+    def set_demura_core(self, demura_core):
+        self.demura_core = demura_core
+        log.debug(
+            "[MediaEngine] DemuraCore attached: %s",
+            self.demura_core is not None
+        )
 
     def set_nav_player(self, nav_player):
         self.nav_player = nav_player
@@ -118,7 +126,7 @@ class MediaEngine(QObject):
             self.gst_player.stop_if_running()
             self.gst_player = None
 
-        self.gst_player = GstSingleFileWorker(cmd_args, auto_kill_after, parent_engine=self)
+        self.gst_player = GstSingleFileWorker(cmd_args, auto_kill_after, parent_engine=self, demura_core=self.demura_core)
         self.gst_player.install_gst_single_file_play_proc_finished(
             self._on_play_single_file_worker_finished)
         self.gst_player.install_gst_single_file_play_proc_started(
@@ -382,6 +390,9 @@ class MediaEngine(QObject):
             # Next Video
             self._playlist_play_item(direction)
             return
+
+        # Found valid file → reset missing counter
+        self._playlist_missing_count = 0
 
         # Normal playback
         p = pathlib.Path(abs_path)

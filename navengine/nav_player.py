@@ -25,6 +25,8 @@ class ARNavPlayer:
 
         self.asset_dir = NAV_ASSET_URI_PATH
         self.media_engine = None
+        self.demura_core = None
+        self.demura_filter = None
         self.pipeline = None
         self.bus = None
         self.nav_active = False
@@ -56,13 +58,15 @@ class ARNavPlayer:
     # ---------------------------------------------------------
     # External Engine and Media Control
     # ---------------------------------------------------------
+    def set_demura_core(self, demura_core):
+        self.demura_core = demura_core
+        log.debug("[ARNavPlayer] DemuraCore attached: %s",
+                  self.demura_core is not None)
 
     def set_media_engine(self, media_engine):
-        """Inject external media engine instance"""
         self.media_engine = media_engine
 
     def _stop_media_if_running(self):
-        """Stop background media playback to release hardware decoding resources before starting navigation"""
         try:
             if self.media_engine:
                 print("[NAV] Background media detected, stopping to release resources...")
@@ -71,43 +75,111 @@ class ARNavPlayer:
             print(f"[NAV] Failed to stop media: {e}")
 
     # ---------------------------------------------------------
-    # Core Pipeline and UI Bin Construction (Seamless Switching)
+    # Demura Plugin
     # ---------------------------------------------------------
+    def _scan_demura_plugin(self):
+        if self.demura_core is None or not self.demura_core.use_gst_plugin:
+            return False
 
+        plugin_dir = str(self.demura_core.runtime_dir)
+        result = Gst.Registry.get().scan_path(plugin_dir)
+
+        log.debug("[ARNavPlayer] Scan Demura Plugin: path=%s, result=%s",
+                  plugin_dir, result)
+
+        return Gst.ElementFactory.find("demuratransform") is not None
+
+    def _create_demura_filter(self):
+        if self.demura_core is not None and self.demura_core.use_gst_plugin:
+            self.demura_filter = Gst.ElementFactory.make(
+                "demuratransform", "nav_demura_filter"
+            )
+            if not self.demura_filter:
+                raise RuntimeError("Failed to create demuratransform")
+        else:
+            self.demura_filter = Gst.ElementFactory.make(
+                "identity", "nav_demura_filter"
+            )
+
+        return self.demura_filter
+
+    def _apply_demura_properties(self):
+        if (self.demura_filter is None or
+                self.demura_core is None or
+                not self.demura_core.use_gst_plugin):
+            return
+
+        props = self.demura_core.get_gst_properties()
+
+        for name, value in props.items():
+            self.demura_filter.set_property(name, value)
+
+        print("========== NAV DEMURA ==========")
+        print("Plugin     : demuratransform")
+        print(f"Enabled    : {props.get('enabled')}")
+        print(f"ROI        : {props.get('x-min')}, {props.get('y-min')} "
+              f"-> {props.get('x-max')}, {props.get('y-max')}")
+        print(f"Gain File  : {props.get('gain-file')}")
+        print("================================")
+
+        log.debug("[ARNavPlayer] Demura properties applied: %s", props)
+
+    def set_demura_enabled(self, enabled):
+        enabled = bool(enabled)
+
+        if self.demura_core:
+            self.demura_core.set_enabled(enabled)
+
+        if (self.demura_filter is not None and
+                self.demura_core is not None and
+                self.demura_core.use_gst_plugin):
+            self.demura_filter.set_property("enabled", enabled)
+
+    # ---------------------------------------------------------
+    # Core Pipeline and UI Bin Construction
+    # ---------------------------------------------------------
     def _create_overlay_bin(self):
-        """Build UI Bin, detecting and using i.MX93 PXP hardware acceleration if available"""
         bin = Gst.Bin.new("nav-ui-bin")
 
-        # 1. Select conversion element based on architecture (x86 vs i.MX93)
+        # Video Convert
         if self.is_x86:
             vconv = Gst.ElementFactory.make("videoconvert", "bin_vconv")
             vscale = Gst.ElementFactory.make("videoscale", "bin_vscale")
         else:
-            # i.MX93: Force PXP 2D engine for hardware conversion and scaling
             vconv = Gst.ElementFactory.make("imxpxpvideoconvert", "bin_vconv")
             if not vconv:
                 vconv = Gst.ElementFactory.make("videoconvert", "bin_vconv")
             vscale = Gst.ElementFactory.make("videoscale", "bin_vscale")
 
+        # Force BGR 640x480 for Demura
         caps_filter = Gst.ElementFactory.make("capsfilter", "bin_caps")
         caps = Gst.Caps.from_string(
-            f"video/x-raw,width={self.nav_window_width},height={self.nav_window_height},pixel-aspect-ratio=1/1"
+            f"video/x-raw,format=BGR,"
+            f"width={self.nav_window_width},height={self.nav_window_height},"
+            f"pixel-aspect-ratio=1/1"
         )
         caps_filter.set_property("caps", caps)
 
-        # 2. Create all overlay elements (Link order: Image -> Map -> Text A -> Text B...)
+        # Navigation Overlay
         self.map_overlay = Gst.ElementFactory.make("gdkpixbufoverlay", "nav_map")
         self.road_overlay = Gst.ElementFactory.make("textoverlay", "nav_road")
         self.hint_overlay = Gst.ElementFactory.make("textoverlay", "nav_hint")
         self.dist_value_overlay = Gst.ElementFactory.make("textoverlay", "nav_dist_val")
         self.dist_unit_overlay = Gst.ElementFactory.make("textoverlay", "nav_dist_unit")
 
-        # 3. Add to Bin and link
-        elements = [vconv, vscale, caps_filter, self.map_overlay, self.road_overlay,
-                    self.hint_overlay, self.dist_value_overlay, self.dist_unit_overlay]
+        # Demura Plugin
+        demura_filter = self._create_demura_filter()
+        # Add to Bin and link
+        elements = [
+            vconv, vscale, caps_filter,
+            self.map_overlay, self.road_overlay, self.hint_overlay,
+            self.dist_value_overlay, self.dist_unit_overlay,
+            demura_filter
+        ]
 
         for el in elements:
-            if not el: raise RuntimeError(f"Failed to create element")
+            if not el:
+                raise RuntimeError("Failed to create pipeline element")
             bin.add(el)
 
         # Linking path
@@ -118,38 +190,59 @@ class ARNavPlayer:
         self.road_overlay.link(self.hint_overlay)
         self.hint_overlay.link(self.dist_value_overlay)
         self.dist_value_overlay.link(self.dist_unit_overlay)
+        self.dist_unit_overlay.link(demura_filter)
 
-        # 4. Create Ghost Pads (Public interfaces)
+        # Ghost Pads
         sink_pad = Gst.GhostPad.new("sink", vconv.get_static_pad("sink"))
-        src_pad = Gst.GhostPad.new("src", self.dist_unit_overlay.get_static_pad("src"))
+        src_pad = Gst.GhostPad.new("src", demura_filter.get_static_pad("src"))
         bin.add_pad(sink_pad)
         bin.add_pad(src_pad)
 
         return bin
 
     def _build_pipeline(self, video_uri):
+        "Scan for the Demura plugin if it exists"
+        self._scan_demura_plugin()
         """Initialize playbin3 player"""
         self.pipeline = Gst.ElementFactory.make("playbin3", "nav_pipeline")
+        '''
+        # Enable instant URI switching if supported
+        if self.pipeline.find_property("instant-uri"):
+            self.pipeline.set_property("instant-uri", True)
+            log.info("[NAV] instant-uri enabled")
+        else:
+            log.warning("[NAV] instant-uri not supported")
+        '''
 
-        # Attach custom UI Bin to video-filter to keep UI independent of video swaps
-        self.pipeline.set_property("video-filter", self._create_overlay_bin())
+        overlay_bin = self._create_overlay_bin()
+        self.pipeline.set_property("video-filter", overlay_bin)
 
-        # Select Sink based on platform
+        # Apply ROI / Gain / Enable
+        self._apply_demura_properties()
+
+        # Video Sink
         sink_name = "autovideosink" if self.is_x86 else "waylandsink"
         video_sink = Gst.ElementFactory.make(sink_name, "video_sink")
+
+        # if not self.is_x86:
+        #     video_sink.set_property("sync", False)
+
         self.pipeline.set_property("video-sink", video_sink)
 
-        # Set URI
+        # URI
         self.pipeline.set_property("uri", video_uri)
         self.current_video_uri = video_uri
 
-        # Message monitoring
+        # Bus
         self.bus = self.pipeline.get_bus()
         self.bus.add_signal_watch()
         self.bus.connect("message", self._on_message)
 
         self._setup_overlay_styles()
 
+    # ---------------------------------------------------------
+    # Overlay Style
+    # ---------------------------------------------------------
     def _setup_overlay_styles(self):
         """Initialize fonts, positions, and colors for all UI layers"""
         # Map
@@ -221,28 +314,41 @@ class ARNavPlayer:
             return
 
         log.info(f"[NAV] Switching video to: {video_uri}")
+        if self.is_x86:
+            # x86 uses GStreamer 1.20, which does not support
+            # instant URI switching. Stop playback before changing URI.
+            self.pipeline.set_state(Gst.State.READY)
+            self.pipeline.get_state(Gst.CLOCK_TIME_NONE)
 
-        # Core optimization: Don't go back to READY. Use Flush Seek with URI switch.
-        # This keeps the Sink (window) open and holding the last frame until the new video arrives.
-        try:
-            # 1. Set new URI
             self.pipeline.set_property("uri", video_uri)
-
-            # 2. Trigger a Flush Seek if playbin3 supports it
-            # Clears old frame remnants in buffer and loads the new URI immediately
-            self.pipeline.seek_simple(
-                Gst.Format.TIME,
-                Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT,
-                0
-            )
-
             self.current_video_uri = video_uri
-        except Exception as e:
-            log.error(f"[NAV] Failed to switch video: {e}")
+
+            self.pipeline.set_state(Gst.State.PLAYING)
+
+            log.info("[NAV] x86 video switched with READY -> PLAYING")
+        else:
+            # Core optimization: Don't go back to READY. Use Flush Seek with URI switch.
+            # This keeps the Sink (window) open and holding the last frame until the new video arrives.
+            try:
+                # i.MX93 / GStreamer 1.24:
+                # Keep seamless URI switching
+                # 1. Set new URI
+                self.pipeline.set_property("uri", video_uri)
+
+                # 2. Trigger a Flush Seek if playbin3 supports it
+                # Clears old frame remnants in buffer and loads the new URI immediately
+                self.pipeline.seek_simple(
+                    Gst.Format.TIME,
+                    Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT,
+                    0
+                )
+
+                self.current_video_uri = video_uri
+            except Exception as e:
+                log.error(f"[NAV] Failed to switch video: {e}")
 
     def _refresh_ui_text(self):
         dist_val, dist_unit = self._format_distance(self.distance_m)
-
         hint_text = NAV_HINT_TEXT_MAP.get(self.direction, "")
 
         if self.distance_m <= 10:
@@ -273,7 +379,6 @@ class ARNavPlayer:
     # ---------------------------------------------------------
     # Map Image Processing
     # ---------------------------------------------------------
-
     def set_nav_map_image(self, file_name: str = "nav_map_image", hex_str: str = ""):
         if not hex_str.strip():
             if self.map_overlay:
@@ -299,7 +404,8 @@ class ARNavPlayer:
                 f.write(raw)
             return out_path
         else:
-            if Image is None: raise RuntimeError("Pillow Required")
+            if Image is None:
+                raise RuntimeError("Pillow Required")
             out_path = os.path.join(self.nav_tmp_dir, f"{base_name}.png")
             img = Image.open(io.BytesIO(raw))
             img.save(out_path, "PNG")
@@ -314,22 +420,40 @@ class ARNavPlayer:
 
     def _system_support_webp(self) -> bool:
         try:
-            out = subprocess.check_output(["gdk-pixbuf-query-loaders"], stderr=subprocess.DEVNULL).decode()
+            out = subprocess.check_output(
+                ["gdk-pixbuf-query-loaders"],
+                stderr=subprocess.DEVNULL
+            ).decode()
+
             return "webp" in out.lower()
+
         except:
             return False
 
     # ---------------------------------------------------------
     # Messages and Resource Cleanup
     # ---------------------------------------------------------
-
     def _on_message(self, bus, message):
         t = message.type
+
         if t == Gst.MessageType.EOS:
-            self.pipeline.seek_simple(Gst.Format.TIME, Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT, 0)
+            #if not self.pipeline:
+            #    return
+            ret = self.pipeline.seek_simple(
+                Gst.Format.TIME,
+                Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT,
+                0
+            )
+            #if ret:
+            #    self.pipeline.set_state(Gst.State.PLAYING)
+            #else:
+            #    log.warning("[NAV] loop seek failed")
+
+
         elif t == Gst.MessageType.ERROR:
             err, dbg = message.parse_error()
             print(f"[NAV] Error: {err}")
+            log.error(f"[NAV] GStreamer Debug: {dbg}")
             self.stop()
 
     def stop(self):
@@ -339,6 +463,8 @@ class ARNavPlayer:
             self.pipeline = None
             self.bus = None
 
+        self.demura_filter = None
+        self.current_video_uri = None
+
     def is_running(self):
         return self.pipeline is not None
-
