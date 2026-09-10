@@ -201,19 +201,20 @@ class ARNavPlayer:
         return bin
 
     def _build_pipeline(self, video_uri):
-        "Scan for the Demura plugin if it exists"
-        self._scan_demura_plugin()
         """Initialize playbin3 player"""
+        # Scan Demura plugin
+        self._scan_demura_plugin()
+
+        # Create playbin3
         self.pipeline = Gst.ElementFactory.make("playbin3", "nav_pipeline")
-        '''
-        # Enable instant URI switching if supported
-        if self.pipeline.find_property("instant-uri"):
+
+        # i.MX93 / GStreamer 1.24:
+        # Enable instant URI switching and avoid extra flush seek.
+        if not self.is_x86 and self.pipeline.find_property("instant-uri"):
             self.pipeline.set_property("instant-uri", True)
             log.info("[NAV] instant-uri enabled")
-        else:
-            log.warning("[NAV] instant-uri not supported")
-        '''
 
+        # Overlay + Demura
         overlay_bin = self._create_overlay_bin()
         self.pipeline.set_property("video-filter", overlay_bin)
 
@@ -223,10 +224,6 @@ class ARNavPlayer:
         # Video Sink
         sink_name = "autovideosink" if self.is_x86 else "waylandsink"
         video_sink = Gst.ElementFactory.make(sink_name, "video_sink")
-
-        # if not self.is_x86:
-        #     video_sink.set_property("sync", False)
-
         self.pipeline.set_property("video-sink", video_sink)
 
         # URI
@@ -309,44 +306,29 @@ class ARNavPlayer:
         self._refresh_ui_text()
 
     def _switch_video(self, video_uri):
-        """Execute smooth transition while keeping the window alive"""
         if self.current_video_uri == video_uri:
             return
 
-        log.info(f"[NAV] Switching video to: {video_uri}")
-        if self.is_x86:
-            # x86 uses GStreamer 1.20, which does not support
-            # instant URI switching. Stop playback before changing URI.
-            self.pipeline.set_state(Gst.State.READY)
-            self.pipeline.get_state(Gst.CLOCK_TIME_NONE)
+        try:
+            if self.is_x86:
+                # x86 / GStreamer 1.20
+                self.pipeline.set_state(Gst.State.READY)
+                self.pipeline.get_state(Gst.CLOCK_TIME_NONE)
 
-            self.pipeline.set_property("uri", video_uri)
-            self.current_video_uri = video_uri
+                self.pipeline.set_property("uri", video_uri)
+                self.pipeline.set_state(Gst.State.PLAYING)
 
-            self.pipeline.set_state(Gst.State.PLAYING)
-
-            log.info("[NAV] x86 video switched with READY -> PLAYING")
-        else:
-            # Core optimization: Don't go back to READY. Use Flush Seek with URI switch.
-            # This keeps the Sink (window) open and holding the last frame until the new video arrives.
-            try:
-                # i.MX93 / GStreamer 1.24:
-                # Keep seamless URI switching
-                # 1. Set new URI
+            else:
+                # i.MX93 / GStreamer 1.24
+                # instant-uri handles source switching.
                 self.pipeline.set_property("uri", video_uri)
 
-                # 2. Trigger a Flush Seek if playbin3 supports it
-                # Clears old frame remnants in buffer and loads the new URI immediately
-                self.pipeline.seek_simple(
-                    Gst.Format.TIME,
-                    Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT,
-                    0
-                )
+            self.current_video_uri = video_uri
 
-                self.current_video_uri = video_uri
-            except Exception as e:
-                log.error(f"[NAV] Failed to switch video: {e}")
+            log.debug("[NAV] Video switched: %s", video_uri)
 
+        except Exception:
+            log.exception("[NAV] Video switch failed")
     def _refresh_ui_text(self):
         dist_val, dist_unit = self._format_distance(self.distance_m)
         hint_text = NAV_HINT_TEXT_MAP.get(self.direction, "")
@@ -437,24 +419,40 @@ class ARNavPlayer:
         t = message.type
 
         if t == Gst.MessageType.EOS:
-            #if not self.pipeline:
-            #    return
-            ret = self.pipeline.seek_simple(
+            if not self.pipeline:
+                return
+
+            self.pipeline.seek_simple(
                 Gst.Format.TIME,
                 Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT,
                 0
             )
-            #if ret:
-            #    self.pipeline.set_state(Gst.State.PLAYING)
-            #else:
-            #    log.warning("[NAV] loop seek failed")
-
 
         elif t == Gst.MessageType.ERROR:
             err, dbg = message.parse_error()
-            print(f"[NAV] Error: {err}")
-            log.error(f"[NAV] GStreamer Debug: {dbg}")
+
+            log.error(
+                "[NAV][GST] ERROR src=%s error=%s",
+                message.src.get_name(),
+                err
+            )
+
+            if dbg:
+                log.debug("[NAV][GST] debug=%s", dbg)
+
             self.stop()
+
+        elif t == Gst.MessageType.WARNING:
+            warn, dbg = message.parse_warning()
+
+            log.warning(
+                "[NAV][GST] WARNING src=%s warning=%s",
+                message.src.get_name(),
+                warn
+            )
+
+            if dbg:
+                log.debug("[NAV][GST] debug=%s", dbg)
 
     def stop(self):
         self.nav_active = False

@@ -13,6 +13,8 @@ class UnixClient:
         self.snd_size = UNIX_SOCKET_BUFFER_SIZE # 4 * 1024 * 1024  # 4 MiB
         self.rcv_size = UNIX_SOCKET_BUFFER_SIZE # 4 * 1024 * 1024
 
+        self._send_lock = asyncio.Lock()
+
     async def connect(self):
         log.debug("[UnixClient] Connecting...")
         self.reader = None
@@ -33,22 +35,63 @@ class UnixClient:
         await self.connect()
 
     async def send(self, msg: str):
-        if self.reader is None or self.writer is None:
-            await self.connect()
-        if self.writer is None:
-            raise RuntimeError("Client not connected")
-        log.debug(f"[UnixClient] Send len: {len(msg)}")
-        try:
-            self.writer.write(msg.encode())
-            await self.writer.drain()
-        except Exception as e:
-            log.debug(f"[UnixClient] Send: {e}")
-            await self.reconnect()
-            return -1
+        async with self._send_lock:
+            try:
+                if (
+                        self.reader is None
+                        or self.writer is None
+                        or self.writer.is_closing()
+                ):
+                    await self.connect()
 
-        data = await self.reader.read(self.rcv_size)
-        log.debug(f"[UnixClient] Receivedlen: {len(data)}")
-        return 0
+                if self.reader is None or self.writer is None:
+                    log.error("[UnixClient] Not connected")
+                    return -1
+
+                encoded_msg = msg.encode("utf-8")
+
+                log.debug(
+                    f"[UnixClient] Send len: {len(encoded_msg)}"
+                )
+
+                self.writer.write(encoded_msg)
+
+                await asyncio.wait_for(
+                    self.writer.drain(),
+                    timeout=3.0,
+                )
+
+                data = await asyncio.wait_for(
+                    self.reader.read(self.rcv_size),
+                    timeout=3.0,
+                )
+
+                if not data:
+                    log.warning(
+                        "[UnixClient] Connection closed by peer"
+                    )
+                    await self.close()
+                    return -1
+
+                log.debug(
+                    f"[UnixClient] Received len: {len(data)}"
+                )
+
+                return 0
+
+            except asyncio.TimeoutError:
+                log.error("[UnixClient] Send/receive timeout")
+                await self.close()
+                return -1
+
+            except asyncio.CancelledError:
+                log.debug("[UnixClient] Send cancelled")
+                raise
+
+            except Exception:
+                log.exception("[UnixClient] Send failed")
+                await self.close()
+                return -1
 
     async def close(self):
         if self.writer is not None:
