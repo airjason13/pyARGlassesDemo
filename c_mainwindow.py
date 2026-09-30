@@ -2,12 +2,13 @@ import asyncio
 import enum
 import signal
 
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QApplication, QStackedLayout
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QApplication, QStackedLayout, QShortcut, QLineEdit, QTextEdit, QPlainTextEdit
+from PyQt5.QtCore import Qt, QTimer, QEvent
+from PyQt5.QtGui import QKeySequence
 
 from mediaengine.mediaengine import MediaEngine
 from navengine.nav_player import ARNavPlayer
-from demura.demura_core import DemuraCore
+from color_adj.demura_core import DemuraCore
 
 from unix_server import UnixServer
 from unix_client import UnixClient
@@ -19,6 +20,7 @@ from ui_pages.ui_playlist_page import PlaylistPage
 from ui_pages.ui_media_page import MediaPage
 from ui_pages.ui_video_setting_page import VideoSettingPage
 from ui_pages.ui_nsight_page import NsightPage
+from ui_pages.ui_color_adj_page import ColorAdjPage
 
 class PageListEnum(enum.IntEnum):
     Media = 0
@@ -26,13 +28,15 @@ class PageListEnum(enum.IntEnum):
     Video_Setting = 2
     Eng = 3
     Nsight = 4
+    Color_Adj = 5
 
-Page_Select_Btn_Name_List = ["Media", "Playlist" ,"Video_Setting", "Eng", "Nsight"]
+Page_Select_Btn_Name_List = ["Media", "Playlist" ,"Video_Setting", "Eng", "Nsight", "Color Adj"]
 Page_List = [MediaPage, # 0
              PlaylistPage, # 1
              VideoSettingPage, # 2
              EngPage, # 3
              NsightPage, # 4
+             ColorAdjPage, # 5
              ]
 
 # Page_Map = dict(zip(Page_Select_Btn_Name_List, Page_List))
@@ -89,6 +93,7 @@ class CMainWindow(QMainWindow):
         self.cmd_parser = CmdParser(self.msg_app_unix_client,
                                     self.media_engine,
                                     self.nav_player,
+                                    self.demura_core,
                                     )
         # Send to message server
         self.cmd_parser.unix_data_ready_to_send.connect(self.send_to_msg_server)
@@ -130,13 +135,13 @@ class CMainWindow(QMainWindow):
     #    self.msg_unix_client = UnixClient(path=UNIX_MSG_SERVER_URI)
 
     def unix_data_received_handler(self, msg:str):
-        log.debug("msg: %s", msg)
+        log.debug("received command: %d characters", len(msg))
         log.debug("[MainWindow] len(msg)=%d tail=%r", len(msg), msg[-80:])
         # print recv cmd on Eng page
         if self.TEST_FLAG is True:
             for i in range(len(self.page_list)):
                 if self.page_list[i].name == "Eng":
-                    self.page_list[i].set_recv_cmd(msg)
+                    self.page_list[i].set_recv_cmd(msg[:512])
                     self.page_layout.setCurrentIndex(i)
                     log.debug("Jump to Eng Page")
 
@@ -158,14 +163,15 @@ class CMainWindow(QMainWindow):
 
         self.setCentralWidget(self.central_widget)
         self.page_layout = QStackedLayout()
-
         for page_cls in Page_List:
             page = page_cls(self, self.central_widget,self.media_engine)
+            page.setFocusPolicy(Qt.StrongFocus)
             self.page_list.append(page)
             self.page_layout.addWidget(page)
 
         self.central_widget.setLayout(self.page_layout)
-        self.page_layout.setCurrentIndex(0)
+        self.page_layout.currentChanged.connect(self.focus_current_page)
+        self.page_layout.setCurrentIndex(0)      
         # for p in self.page_list:
         #     log.debug(p.name)
 
@@ -197,15 +203,37 @@ class CMainWindow(QMainWindow):
         await self.unix_server.stop()
         asyncio.get_event_loop().stop()
 
+    def focus_current_page(self, index=None):
+        page = self.page_layout.currentWidget()
+        if page is not None:
+            page.setFocus(Qt.OtherFocusReason)
+
+    def eventFilter(self, watched, event):
+        # Preserve typing in editable fields; handle P on non-editable controls.
+        if (event.type() == QEvent.KeyPress and event.key() == Qt.Key_P
+                and event.modifiers() == Qt.NoModifier
+                and isinstance(watched, QWidget) and watched.window() is self):
+            focus = QApplication.focusWidget()
+            if isinstance(focus, (QLineEdit, QTextEdit, QPlainTextEdit)) and not focus.isReadOnly():
+                return False
+            if not event.isAutoRepeat():
+                self.change_page(1)
+            return True
+        return super().eventFilter(watched, event)
+
+    def change_page(self, direction):
+        self.page_layout.setCurrentIndex(
+            (self.page_layout.currentIndex() + direction) % self.page_layout.count())
+
     def keyPressEvent(self, event):
         """按下 Esc 鍵退出程式"""
         log.debug("keyPressEvent event.key : %s", event.key())
         if event.key() == Qt.Key_Escape:
             asyncio.create_task(self.shutdown_and_quit())
         elif event.key() == Qt.Key_P:
-            next_index = (self.page_layout.currentIndex() + 1) % self.page_layout.count()
-            log.debug("next, page_layout : %d", next_index)
-            self.page_layout.setCurrentIndex(next_index)
+            self.change_page(1)
+        else:
+            super().keyPressEvent(event)
 
     # ---- 關閉流程：非同步 ----
     async def shutdown_and_quit(self):

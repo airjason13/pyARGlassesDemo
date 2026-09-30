@@ -96,7 +96,8 @@ enum
     PROP_X_MAX,
     PROP_Y_MAX,
 
-    PROP_GAIN_FILE
+    PROP_GAIN_FILE,
+    PROP_GAIN_READY
 };
 
 
@@ -464,12 +465,11 @@ gst_demura_transform_set_property(
     {
         case PROP_ENABLED:
 
-            self->enabled =
-                g_value_get_boolean(value);
+            g_atomic_int_set(&self->enabled, g_value_get_boolean(value));
 
             g_print(
                 "[Demura Transform] Enabled = %s\n",
-                self->enabled ? "TRUE" : "FALSE"
+                g_atomic_int_get(&self->enabled) ? "TRUE" : "FALSE"
             );
 
             break;
@@ -551,11 +551,15 @@ gst_demura_transform_get_property(
 
     switch (property_id)
     {
+        case PROP_GAIN_READY:
+            g_value_set_boolean(value, self->gain_loaded);
+            break;
+
         case PROP_ENABLED:
 
             g_value_set_boolean(
                 value,
-                self->enabled
+                g_atomic_int_get(&self->enabled)
             );
 
             break;
@@ -651,7 +655,7 @@ gst_demura_transform_transform_ip(
      * Demura OFF -> Pass Through
      * ----------------------------------------------------- */
 
-    if (!self->enabled)
+    if (!g_atomic_int_get(&self->enabled))
     {
         return GST_FLOW_OK;
     }
@@ -775,27 +779,7 @@ gst_demura_transform_start(
     );
 
 
-    /*
-     * Demura OFF:
-     * no need to load Gain.
-     */
-
-    if (!self->enabled)
-    {
-        g_print(
-            "[Demura Transform] "
-            "Disabled -> Pass Through\n"
-        );
-
-        return TRUE;
-    }
-
-
-    /*
-     * Demura ON:
-     * load Gain once.
-     */
-
+    /* Preload gain even while disabled so OFF -> ON works without restart. */
     if (!gst_demura_transform_load_gain(
             self))
     {
@@ -928,6 +912,11 @@ gst_demura_transform_class_init(
     /* -----------------------------------------------------
      * Properties
      * ----------------------------------------------------- */
+
+    g_object_class_install_property(
+        gobject_class, PROP_GAIN_READY,
+        g_param_spec_boolean("gain-ready", "Gain ready", "Gain loaded successfully",
+                             FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
 
     g_object_class_install_property(
         gobject_class,

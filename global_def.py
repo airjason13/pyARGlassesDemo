@@ -31,6 +31,7 @@ if platform.machine() == 'x86_64':
     PLAYLISTS_URI_PATH = f"/home/{current_user}/Videos/Playlists/"
     PERSIST_CONFIG_URI_PATH = f"/home/{current_user}/Videos/persist/"
     NAV_ASSET_URI_PATH = f"/home/{current_user}/Videos/nav_assets/"
+    COLOR_ADJ_CONFIG_URI_PATH = f"/home/{current_user}/Videos/color_adj/"
 else:
     MEDIAFILE_URI_PATH = "/root/MediaFiles/"
     SNAPSHOTS_URI_PATH = "/root/MediaFiles/Snapshots/"
@@ -40,9 +41,13 @@ else:
     PLAYLISTS_URI_PATH = "/root/MediaFiles/Playlists/"
     PERSIST_CONFIG_URI_PATH = "/root/persist_config/"
     NAV_ASSET_URI_PATH = "/root/MediaFiles/nav_assets/"
+    COLOR_ADJ_CONFIG_URI_PATH = f"/root/MediaFiles/color_adj/"
 
 TEMPORARY_SUBTITLE_URI_PATH = "/tmp/subtitle.txt"
 
 UNIX_SOCKET_BUFFER_SIZE = 8*1024*1024
 
 HAS_AUDIO = False
+
+DEMURA_RUNTIME_DIR = "/tmp/demura"
+DEMURA_KEEP_UPLOAD_TEMP = True

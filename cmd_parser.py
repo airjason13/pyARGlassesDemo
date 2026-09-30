@@ -5,7 +5,7 @@ from navengine.nav_def import SUPPORTED_NAV_DIRECTIONS
 from navengine.nav_player import ARNavPlayer
 from utils.file_utils import *
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, QSignalBlocker, pyqtSignal
 
 from unix_client import UnixClient
 import shutil
@@ -14,28 +14,29 @@ import json
 
 class CmdParser(QObject):
     unix_data_ready_to_send = pyqtSignal(str)
-    def __init__(self, msg_unix_client:UnixClient, media_engine:MediaEngine, nav_player:ARNavPlayer):
+    def __init__(self, msg_unix_client:UnixClient, media_engine:MediaEngine, nav_player:ARNavPlayer, demura_core=None):
         super().__init__()
         self.msg_unix_client = msg_unix_client
         self.media_engine = media_engine
         self.nav_player = nav_player
+        self.demura_core = demura_core
         self.media_engine.install_media_play_status_changed(self.media_engine_status_changed)
         self.media_engine.install_media_engine_error_report(self.media_engine_error_report)
 
-    def parse_cmds(self, data):
-        log.debug("data : %s", data)
-        d = dict(item.split(':', 1) for item in data.split(';'))
-        if 'data' not in data:
-            d['data'] = 'no_data'
-        else:
-            pass
-        log.debug("%s", d)
-        log.debug("d['cmd']: %s", d['cmd'])
+    def parse_cmds(self, data, send_reply=True):
+        log.debug("command bytes: %d", len(data))
         try:
-            self.cmd_function_map[d['cmd']](self, d)
-        except Exception as e:
-            log.error(e)
-
+            fields = dict(item.split(':', 1) for item in data.strip().split(';'))
+            fields.setdefault('data', 'no_data')
+            log.debug("command: %s", fields.get('cmd'))
+            handler = self.cmd_function_map[fields['cmd']]
+            if send_reply:
+                return handler(self, fields)
+            with QSignalBlocker(self):
+                return handler(self, fields)
+        except Exception as error:
+            log.error('parse_cmds error: %s', error)
+            return {'status': 'NG', 'error': str(error)}
 
     def demo_get_sw_version(self, data:dict):
         data['src'], data['dst'] = data['dst'], data['src']
@@ -467,6 +468,147 @@ class CmdParser(QObject):
         reply = ";".join(f"{k}:{v}" for k, v in data.items())
         self.unix_data_ready_to_send.emit(reply)
 
+    def demo_get_demura_on_off(self, data: dict):
+        try:
+            if self.demura_core is None:
+                raise RuntimeError('demura_unavailable')
+            enabled = self.demura_core.get_enabled()
+            result = {'status': 'OK', 'enabled': enabled}
+            log.info('%s OK: DemuraOnOff=%s', data['cmd'],
+                     'ON' if enabled else 'OFF')
+        except Exception as error:
+            result = {'status': 'NG', 'error': str(error)}
+            log.error('%s NG: %s', data['cmd'], error)
+        data['src'], data['dst'] = data['dst'], data['src']
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ';'.join(f'{key}:{value}' for key, value in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+        return result
+
+    def demo_set_demura_on_off(self, data: dict):
+        try:
+            if self.demura_core is None:
+                raise RuntimeError('demura_unavailable')
+            enabled = json.loads(data.get('data', 'null'))
+            if type(enabled) is not bool:
+                raise ValueError('enabled must be a JSON boolean')
+            self.media_engine.playlist_stop()
+            self.nav_player.stop()
+            self.demura_core.set_enabled(enabled)
+            enabled = self.demura_core.get_enabled()
+            result = {'status': 'OK', 'enabled': enabled}
+            log.info('%s OK: DemuraOnOff=%s', data['cmd'],
+                     'ON' if enabled else 'OFF')
+        except Exception as error:
+            result = {'status': 'NG', 'error': str(error)}
+            log.error('%s NG: %s', data['cmd'], error)
+        data['src'], data['dst'] = data['dst'], data['src']
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ';'.join(f'{key}:{value}' for key, value in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+        return result
+
+    def demo_get_demura_edge(self, data: dict):
+        try:
+            if self.demura_core is None:
+                raise RuntimeError('demura_unavailable')
+            edge = self.demura_core.get_edge()
+            result = {'status': 'OK', 'edge': edge}
+            log.info('%s OK: %s', data['cmd'], edge)
+        except Exception as error:
+            result = {'status': 'NG', 'error': str(error)}
+            log.error('%s NG: %s', data['cmd'], error)
+        data['src'], data['dst'] = data['dst'], data['src']
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ';'.join(f'{key}:{value}' for key, value in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+        return result
+
+    def demo_set_demura_edge(self, data: dict):
+        try:
+            if self.demura_core is None:
+                raise RuntimeError('demura_unavailable')
+            edge = json.loads(data.get('data', 'null'))
+            self.media_engine.playlist_stop()
+            self.nav_player.stop()
+            edge = self.demura_core.set_edge(edge)
+            result = {'status': 'OK', 'edge': edge}
+            log.info('%s OK: %s (saved; runtime reloaded; ready for next playback)',
+                     data['cmd'], edge)
+        except Exception as error:
+            result = {'status': 'NG', 'error': str(error)}
+            log.error('%s NG: %s', data['cmd'], error)
+        data['src'], data['dst'] = data['dst'], data['src']
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ';'.join(f'{key}:{value}' for key, value in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+        return result
+
+    def demo_get_demura_roi(self, data: dict):
+        try:
+            if self.demura_core is None:
+                raise RuntimeError('demura_unavailable')
+            roi = self.demura_core.get_offset_ori()
+            result = {'status': 'OK', 'roi': roi}
+            log.info('%s OK: %s', data['cmd'], roi)
+        except Exception as error:
+            result = {'status': 'NG', 'error': str(error)}
+            log.error('%s NG: %s', data['cmd'], error)
+        data['src'], data['dst'] = data['dst'], data['src']
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ';'.join(f'{key}:{value}' for key, value in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+        return result
+
+    def demo_set_demura_roi(self, data: dict):
+        try:
+            if self.demura_core is None:
+                raise RuntimeError('demura_unavailable')
+            roi = json.loads(data.get('data', 'null'))
+            self.media_engine.playlist_stop()
+            self.nav_player.stop()
+            roi = self.demura_core.set_offset_ori(roi)
+            result = {'status': 'OK', 'roi': roi}
+            log.info('%s OK: %s (saved; runtime reloaded; ready for next playback)',
+                     data['cmd'], roi)
+        except Exception as error:
+            result = {'status': 'NG', 'error': str(error)}
+            log.error('%s NG: %s', data['cmd'], error)
+        data['src'], data['dst'] = data['dst'], data['src']
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ';'.join(f'{key}:{value}' for key, value in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+        return result
+
+    def demo_set_demura_lut(self, data: dict):
+        upload_id = None
+        try:
+            if self.demura_core is None:
+                raise RuntimeError('demura_unavailable')
+            payload = json.loads(data.get('data', '{}'))
+            if isinstance(payload, dict):
+                upload_id = payload.get('id')
+            received, raw = self.demura_core.receive_lut_chunk(payload)
+            if raw is None:
+                result = {'status': 'RECEIVING', **received}
+            else:
+                self.media_engine.playlist_stop()
+                self.nav_player.stop()
+                uploaded = self.demura_core.set_lut(raw)
+                result = {'status': 'OK', 'id': upload_id, **uploaded}
+                log.info('%s OK: LUT saved and runtime reloaded (%d bytes)', data['cmd'], len(raw))
+        except Exception as error:
+            result = {'status': 'NG', 'id': upload_id, 'error': str(error)}
+            log.error('%s NG: %s', data['cmd'], error)
+        if result['status'] != 'RECEIVING':
+            if self.demura_core is not None:
+                self.demura_core.clear_lut_upload()
+        data['src'], data['dst'] = data['dst'], data['src']
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ';'.join(f'{key}:{value}' for key, value in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+        return result
+
     cmd_function_map = {
         DEMO_GET_SW_VERSION: demo_get_sw_version,
         DEMO_GET_MEDIAFILE_FILE_LIST: demo_get_mediafile_file_list,
@@ -515,6 +657,14 @@ class CmdParser(QObject):
         DEMO_SET_NAV_STATE:demo_set_nav_state,
         DEMO_SET_NAV_STOP:demo_set_nav_stop,
         DEMO_SET_NAV_MAP_IMAGE:demo_set_nav_map_image,
+
+        DEMO_GET_DEMURA_ROI: demo_get_demura_roi,
+        DEMO_SET_DEMURA_ROI: demo_set_demura_roi,
+        DEMO_GET_DEMURA_EDGE: demo_get_demura_edge,
+        DEMO_SET_DEMURA_EDGE: demo_set_demura_edge,
+        DEMO_GET_DEMURA_ON_OFF: demo_get_demura_on_off,
+        DEMO_SET_DEMURA_ON_OFF: demo_set_demura_on_off,
+        DEMO_SET_DEMURA_LUT: demo_set_demura_lut,
     }
 
     ''''''
@@ -539,4 +689,3 @@ class CmdParser(QObject):
         reply_dict = self.spec_cmd_pack(DEMO_SPEC_MEDIAENGINE_CMD_ERROR_REPORT, reason)
         reply_str = ";".join(f"{k}:{v}" for k, v in reply_dict.items())
         self.unix_data_ready_to_send.emit(reply_str)
-
