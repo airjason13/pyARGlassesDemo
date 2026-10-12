@@ -51,10 +51,6 @@ class ARNavPlayer:
         # System Hardware Detection
         self.is_x86 = platform.machine() == "x86_64"
 
-        # Resolution Settings
-        self.nav_window_width = 640
-        self.nav_window_height = 480
-
     # ---------------------------------------------------------
     # External Engine and Media Control
     # ---------------------------------------------------------
@@ -151,11 +147,14 @@ class ARNavPlayer:
                 vconv = Gst.ElementFactory.make("videoconvert", "bin_vconv")
             vscale = Gst.ElementFactory.make("videoscale", "bin_vscale")
 
-        # Force BGR 640x480 for Demura
+        video_frame_size = self.demura_core.get_video_frame_size() if self.demura_core else {
+            "width": 640, "height": 480
+        }
+        # Force the configured BGR frame size for Demura.
         caps_filter = Gst.ElementFactory.make("capsfilter", "bin_caps")
         caps = Gst.Caps.from_string(
             f"video/x-raw,format=BGR,"
-            f"width={self.nav_window_width},height={self.nav_window_height},"
+            f"width={video_frame_size['width']},height={video_frame_size['height']},"
             f"pixel-aspect-ratio=1/1"
         )
         caps_filter.set_property("caps", caps)

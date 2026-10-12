@@ -14,9 +14,6 @@ from color_adj.color_adj_config import ColorAdjConfig, DEMURA_LUT_NAME, DEMURA_L
 
 
 class DemuraCore:
-    WIDTH = 640
-    HEIGHT = 480
-
     # =====================================================
     # Lifecycle / runtime reload
     # =====================================================
@@ -103,6 +100,8 @@ class DemuraCore:
         # -------------------------------------------------
 
         self.offset_ori = None
+        self.frame_width = 0
+        self.frame_height = 0
 
         self.x_min = 0
         self.y_min = 0
@@ -169,6 +168,14 @@ class DemuraCore:
 
     def get_offset_ori(self):
         return self.config.get_offset_ori()
+
+    def get_video_frame_size(self):
+        return self.config.get_video_frame_size()
+
+    def set_video_frame_size(self, video_frame_size):
+        self.config.set_video_frame_size(video_frame_size)
+        self.reload_runtime(reload_config=True, reload_lut=True)
+        return self.get_video_frame_size()
 
     def set_offset_ori(self, offset):
         self.config.set_offset_ori(offset)
@@ -391,6 +398,11 @@ class DemuraCore:
             f"ROI            : "
             f"x={self.x_min}~{self.x_max}, "
             f"y={self.y_min}~{self.y_max}"
+        )
+
+        log.debug(
+            f"Video Frame Size     : "
+            f"{self.frame_width} x {self.frame_height}"
         )
 
         log.debug(
@@ -619,6 +631,9 @@ class DemuraCore:
 
     def load_config(self):
         self.enabled = self.config.get_demura()
+        video_frame_size = self.config.get_video_frame_size()
+        self.frame_width = video_frame_size['width']
+        self.frame_height = video_frame_size['height']
         edge = self.config.get_edge()
         self.extend_top = edge['top']
         self.extend_bottom = edge['bottom']
@@ -761,7 +776,7 @@ class DemuraCore:
 
         ext_bottom = min(
             int(self.extend_bottom),
-            self.HEIGHT
+            self.frame_height
             - int(self.y_max),
         )
 
@@ -772,7 +787,7 @@ class DemuraCore:
 
         ext_right = min(
             int(self.extend_right),
-            self.WIDTH
+            self.frame_width
             - int(self.x_max),
         )
 

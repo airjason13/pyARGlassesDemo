@@ -508,6 +508,42 @@ class CmdParser(QObject):
         self.unix_data_ready_to_send.emit(reply)
         return result
 
+    def demo_get_video_frame_size(self, data: dict):
+        try:
+            if self.demura_core is None:
+                raise RuntimeError('demura_unavailable')
+            video_frame_size = self.demura_core.get_video_frame_size()
+            result = {'status': 'OK', 'video_frame_size': video_frame_size}
+            log.info('%s OK: %s', data['cmd'], video_frame_size)
+        except Exception as error:
+            result = {'status': 'NG', 'error': str(error)}
+            log.error('%s NG: %s', data['cmd'], error)
+        data['src'], data['dst'] = data['dst'], data['src']
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ';'.join(f'{key}:{value}' for key, value in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+        return result
+
+    def demo_set_video_frame_size(self, data: dict):
+        try:
+            if self.demura_core is None:
+                raise RuntimeError('demura_unavailable')
+            video_frame_size = json.loads(data.get('data', 'null'))
+            self.media_engine.playlist_stop()
+            self.nav_player.stop()
+            video_frame_size = self.demura_core.set_video_frame_size(video_frame_size)
+            result = {'status': 'OK', 'video_frame_size': video_frame_size}
+            log.info('%s OK: %s (saved; runtime reloaded; ready for next playback)',
+                     data['cmd'], video_frame_size)
+        except Exception as error:
+            result = {'status': 'NG', 'error': str(error)}
+            log.error('%s NG: %s', data['cmd'], error)
+        data['src'], data['dst'] = data['dst'], data['src']
+        data['data'] = json.dumps(result, ensure_ascii=False)
+        reply = ';'.join(f'{key}:{value}' for key, value in data.items())
+        self.unix_data_ready_to_send.emit(reply)
+        return result
+
     def demo_get_demura_edge(self, data: dict):
         try:
             if self.demura_core is None:
@@ -664,6 +700,8 @@ class CmdParser(QObject):
         DEMO_SET_DEMURA_EDGE: demo_set_demura_edge,
         DEMO_GET_DEMURA_ON_OFF: demo_get_demura_on_off,
         DEMO_SET_DEMURA_ON_OFF: demo_set_demura_on_off,
+        DEMO_GET_VIDEO_FRAME_SIZE: demo_get_video_frame_size,
+        DEMO_SET_VIDEO_FRAME_SIZE: demo_set_video_frame_size,
         DEMO_SET_DEMURA_LUT: demo_set_demura_lut,
     }
 

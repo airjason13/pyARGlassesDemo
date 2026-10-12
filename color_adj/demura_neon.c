@@ -23,7 +23,7 @@ gcc -O3 -shared -fPIC \
 void demura_process_neon(
     uint8_t *frame,
     const uint16_t *gain,
-    int frame_w,
+    int frame_stride,
     int x_min,
     int y_min,
     int x_max,
@@ -43,7 +43,7 @@ void demura_process_neon(
     {
         uint8_t *pixel_ptr =
             frame +
-            ((y_min + y) * frame_w + x_min) * 3;
+            (y_min + y) * frame_stride + x_min * 3;
 
         const uint16_t *gain_ptr =
             gain +
@@ -123,7 +123,7 @@ void demura_process_neon(
     {
         uint8_t *pixel_ptr =
             frame +
-            ((y_min + y) * frame_w + x_min) * 3;
+            (y_min + y) * frame_stride + x_min * 3;
 
         const uint16_t *gain_ptr =
             gain +

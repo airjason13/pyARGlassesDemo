@@ -12,7 +12,7 @@
 void demura_process_neon(
     uint8_t *frame,
     const uint16_t *gain,
-    int frame_w,
+    int frame_stride,
     int x_min,
     int y_min,
     int x_max,
@@ -24,10 +24,9 @@ void demura_process_neon(
  * Runtime Frame Configuration
  * ========================================================= */
 
-#define FRAME_W 640
-#define FRAME_H 480
 #define FRAME_CHANNELS 3
-#define FRAME_SIZE (FRAME_W * FRAME_H * FRAME_CHANNELS)
+#define FRAME_W_MAX 640
+#define FRAME_H_MAX 480
 
 
 /* =========================================================
@@ -71,6 +70,10 @@ struct _GstDemuraTransform
 
     gsize gain_count;
     gboolean gain_loaded;
+
+    gint frame_width;
+    gint frame_height;
+    gboolean have_frame_size;
 };
 
 
@@ -104,9 +107,7 @@ enum
 /* =========================================================
  * Input / Output Caps
  *
- * Demura Runtime:
- *     BGR
- *     640 x 480
+ * Demura Runtime: packed BGR with negotiated width and height.
  * ========================================================= */
 
 static GstStaticPadTemplate sink_template =
@@ -117,8 +118,8 @@ GST_STATIC_PAD_TEMPLATE(
     GST_STATIC_CAPS(
         "video/x-raw, "
         "format=(string)BGR, "
-        "width=(int)640, "
-        "height=(int)480"
+        "width=(int)[1," G_STRINGIFY(FRAME_W_MAX) "], "
+        "height=(int)[1," G_STRINGIFY(FRAME_H_MAX) "]"
     )
 );
 
@@ -131,8 +132,8 @@ GST_STATIC_PAD_TEMPLATE(
     GST_STATIC_CAPS(
         "video/x-raw, "
         "format=(string)BGR, "
-        "width=(int)640, "
-        "height=(int)480"
+        "width=(int)[1," G_STRINGIFY(FRAME_W_MAX) "], "
+        "height=(int)[1," G_STRINGIFY(FRAME_H_MAX) "]"
     )
 );
 
@@ -186,8 +187,6 @@ gst_demura_transform_load_gain(
 
     if (self->x_min < 0 ||
         self->y_min < 0 ||
-        self->x_max > FRAME_W ||
-        self->y_max > FRAME_H ||
         self->x_max <= self->x_min ||
         self->y_max <= self->y_min)
     {
@@ -645,7 +644,9 @@ gst_demura_transform_transform_ip(
     static guint64 frame_count = 0;
 
 
-    GstMapInfo map;
+    GstMapInfo map = GST_MAP_INFO_INIT;
+    guint8 *frame_data;
+    gint frame_stride;
 
 
     frame_count++;
@@ -676,10 +677,8 @@ gst_demura_transform_transform_ip(
      * Writable Streaming Frame
      * ----------------------------------------------------- */
 
-    if (!gst_buffer_map(
-            buffer,
-            &map,
-            GST_MAP_READWRITE))
+    if (!self->have_frame_size ||
+        !gst_buffer_map(buffer, &map, GST_MAP_READWRITE))
     {
         g_printerr(
             "[Demura Transform] "
@@ -690,27 +689,43 @@ gst_demura_transform_transform_ip(
     }
 
 
-    /* -----------------------------------------------------
-     * Frame Size Check
-     * ----------------------------------------------------- */
-
-    if (map.size < FRAME_SIZE)
+    if (self->x_min < 0 || self->y_min < 0 ||
+        self->x_max > self->frame_width ||
+        self->y_max > self->frame_height ||
+        self->x_max <= self->x_min || self->y_max <= self->y_min)
     {
         g_printerr(
             "[Demura Transform] "
-            "Invalid frame size: %zu "
-            "(expected >= %d)\n",
-            map.size,
-            FRAME_SIZE
+            "ROI exceeds negotiated frame: ROI=(%d,%d)-(%d,%d) Frame=%dx%d\n",
+            self->x_min, self->y_min, self->x_max, self->y_max,
+            self->frame_width, self->frame_height
         );
+        gst_buffer_unmap(buffer, &map);
+        return GST_FLOW_ERROR;
+    }
 
-
-        gst_buffer_unmap(
-            buffer,
-            &map
+    if (map.size % (gsize)self->frame_height != 0 ||
+        map.size / (gsize)self->frame_height > G_MAXINT)
+    {
+        g_printerr(
+            "[Demura Transform] "
+            "Cannot derive frame stride: size=%zu height=%d\n",
+            map.size, self->frame_height
         );
+        gst_buffer_unmap(buffer, &map);
+        return GST_FLOW_ERROR;
+    }
 
-
+    frame_data = map.data;
+    frame_stride = (gint)(map.size / (gsize)self->frame_height);
+    if (frame_stride < self->frame_width * FRAME_CHANNELS)
+    {
+        g_printerr(
+            "[Demura Transform] "
+            "Frame stride too small: stride=%d width=%d\n",
+            frame_stride, self->frame_width
+        );
+        gst_buffer_unmap(buffer, &map);
         return GST_FLOW_ERROR;
     }
 
@@ -720,9 +735,9 @@ gst_demura_transform_transform_ip(
      * ----------------------------------------------------- */
 
     demura_process_neon(
-        map.data,
+        frame_data,
         self->gain_q8,
-        FRAME_W,
+        frame_stride,
         self->x_min,
         self->y_min,
         self->x_max,
@@ -739,10 +754,12 @@ gst_demura_transform_transform_ip(
         g_print(
             "[Demura Transform] "
             "NEON Frame=%" G_GUINT64_FORMAT
-            " Size=%zu "
+            " Frame=%dx%d Stride=%d "
             "ROI=(%d,%d)-(%d,%d)\n",
             frame_count,
-            map.size,
+            self->frame_width,
+            self->frame_height,
+            frame_stride,
             self->x_min,
             self->y_min,
             self->x_max,
@@ -751,13 +768,44 @@ gst_demura_transform_transform_ip(
     }
 
 
-    gst_buffer_unmap(
-        buffer,
-        &map
-    );
+    gst_buffer_unmap(buffer, &map);
 
 
     return GST_FLOW_OK;
+}
+
+
+static gboolean
+gst_demura_transform_set_caps(
+    GstBaseTransform *base,
+    GstCaps *incaps,
+    GstCaps *outcaps
+)
+{
+    GstDemuraTransform *self = GST_DEMURA_TRANSFORM(base);
+    const GstStructure *structure;
+    const gchar *format;
+    (void)outcaps;
+
+    structure = gst_caps_get_structure(incaps, 0);
+    format = gst_structure_get_string(structure, "format");
+    if (format == NULL || g_strcmp0(format, "BGR") != 0 ||
+        !gst_structure_get_int(structure, "width", &self->frame_width) ||
+        !gst_structure_get_int(structure, "height", &self->frame_height) ||
+        self->frame_width <= 0 || self->frame_width > FRAME_W_MAX ||
+        self->frame_height <= 0 || self->frame_height > FRAME_H_MAX)
+    {
+        self->have_frame_size = FALSE;
+        return FALSE;
+    }
+
+    self->have_frame_size = TRUE;
+    g_print(
+        "[Demura Transform] Caps = %dx%d BGR\n",
+        self->frame_width,
+        self->frame_height
+    );
+    return TRUE;
 }
 
 
@@ -940,7 +988,7 @@ gst_demura_transform_class_init(
             "X Min",
             "Demura ROI minimum X",
             0,
-            FRAME_W,
+            FRAME_W_MAX,
             0,
             G_PARAM_READWRITE |
             G_PARAM_STATIC_STRINGS
@@ -956,7 +1004,7 @@ gst_demura_transform_class_init(
             "Y Min",
             "Demura ROI minimum Y",
             0,
-            FRAME_H,
+            FRAME_H_MAX,
             0,
             G_PARAM_READWRITE |
             G_PARAM_STATIC_STRINGS
@@ -972,8 +1020,8 @@ gst_demura_transform_class_init(
             "X Max",
             "Demura ROI maximum X",
             0,
-            FRAME_W,
-            FRAME_W,
+            FRAME_W_MAX,
+            640,
             G_PARAM_READWRITE |
             G_PARAM_STATIC_STRINGS
         )
@@ -988,8 +1036,8 @@ gst_demura_transform_class_init(
             "Y Max",
             "Demura ROI maximum Y",
             0,
-            FRAME_H,
-            FRAME_H,
+            FRAME_H_MAX,
+            480,
             G_PARAM_READWRITE |
             G_PARAM_STATIC_STRINGS
         )
@@ -1054,6 +1102,11 @@ gst_demura_transform_class_init(
             gst_demura_transform_stop
         );
 
+    transform_class->set_caps =
+        GST_DEBUG_FUNCPTR(
+            gst_demura_transform_set_caps
+        );
+
 
     transform_class->transform_ip =
         GST_DEBUG_FUNCPTR(
@@ -1092,11 +1145,11 @@ gst_demura_transform_init(
 
 
     self->x_max =
-        FRAME_W;
+        640;
 
 
     self->y_max =
-        FRAME_H;
+        480;
 
 
     self->gain_file =
@@ -1113,6 +1166,10 @@ gst_demura_transform_init(
 
     self->gain_loaded =
         FALSE;
+
+    self->frame_width = 0;
+    self->frame_height = 0;
+    self->have_frame_size = FALSE;
 }
 
 

@@ -79,11 +79,14 @@ class GstSingleFileWorker(QObject):
         file_path = self.cmd_args
 
         # Demura input format
+        video_frame_size = self.demura_core.get_video_frame_size() if self.demura_core else {
+            "width": 640, "height": 480
+        }
         demura_caps = (
             "video/x-raw,"
             "format=BGR,"
-            "width=640,"
-            "height=480,"
+            f"width={video_frame_size['width']},"
+            f"height={video_frame_size['height']},"
             "pixel-aspect-ratio=1/1"
         )
         # -------------------------------------------------
@@ -727,4 +730,3 @@ class GstSingleFileWorker_PRE(QObject):
             self.pipeline.set_state(Gst.State.PLAYING)
             self.gst_single_file_play_proc_status.emit(PlayStatus.PLAYING)
 '''
-
